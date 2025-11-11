@@ -1,105 +1,160 @@
-// Chờ cho toàn bộ nội dung HTML tải xong
+// Chờ cho toàn bộ nội dung HTML tải xong rồi mới chạy JavaScript
 document.addEventListener("DOMContentLoaded", () => {
-  
   // Lấy các phần tử
   const sendBtn = document.getElementById("send");
   const promptEl = document.getElementById("prompt");
   const output = document.getElementById("output");
-  
-  // Các phần tử MỚI cho ghi âm
   const recordBtn = document.getElementById("recordBtn");
+
   let mediaRecorder;
   let audioChunks = [];
   let isRecording = false;
 
-  if (!sendBtn || !recordBtn) {
-    console.error("Lỗi: Không tìm thấy nút.");
-    return;
-  }
+  // --- 1. THIẾT LẬP WEB SPEECH API (MỚI) ---
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition;
 
-  // --- 1. XỬ LÝ GỬI TEXT (GIỮ NGUYÊN) ---
+  // Kiểm tra xem trình duyệt có hỗ trợ không
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true; // Cho phép nói liên tục
+    recognition.interimResults = true; // Hiển thị kết quả "tạm thời"
+    recognition.lang = "vi-VN"; // Đặt ngôn ngữ (hoặc "en-US")
+
+    // Sự kiện này chạy MỖI KHI có kết quả (kể cả tạm thời)
+    recognition.onresult = (event) => {
+      let interimTranscript = "";
+      let finalTranscript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      
+      // Cập nhật text box real-time!
+      promptEl.value = finalTranscript + interimTranscript;
+    };
+
+    // Xử lý lỗi
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      if (event.error === 'not-allowed') {
+        displayError("Không thể dùng micro.", "Bạn đã chặn quyền truy cập micro. Hãy reset quyền ở thanh địa chỉ.");
+      }
+    };
+
+  } else {
+    console.warn("Web Speech API không được hỗ trợ trên trình duyệt này.");
+  }
+  // --- KẾT THÚC THIẾT LẬP ---
+
+  
+  // --- 2. XỬ LÝ NÚT GỬI TEXT (Giữ nguyên) ---
   sendBtn.addEventListener("click", async () => {
     output.innerHTML = '<div class="card"><p>⏳ Sending text...</p></div>';
     try {
-      const res = await fetch("/api/gemini", { // Endpoint cũ
+      const res = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: promptEl.value }),
-      });
-      const data = await res.json();
-      displayData(data); // Tách hàm hiển thị ra
-    } catch (err) {
-      displayError(err.message);
-    }
-  });
-
-  // --- 2. XỬ LÝ GHI ÂM (MỚI) ---
-  recordBtn.addEventListener("click", async () => {
-    if (isRecording) {
-      // Dừng ghi âm
-      mediaRecorder.stop();
-      isRecording = false;
-      recordBtn.textContent = "🎤 Record (Click to Start)";
-      recordBtn.style.backgroundColor = ""; // Reset màu
-    } else {
-      // Bắt đầu ghi âm
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        // Cấu hình media recorder
-        // Trình duyệt sẽ quyết định codec, thường là webm/opus
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = []; // Reset mảng chứa audio
-
-        mediaRecorder.ondataavailable = (event) => {
-          audioChunks.push(event.data);
-        };
-
-        mediaRecorder.onstop = async () => {
-          // Tạo file âm thanh
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm; codecs=opus' });
-          
-          // Gửi file lên server
-          await sendAudioToServer(audioBlob);
-          
-          // Tắt stream micro
-          stream.getTracks().forEach(track => track.stop());
-        };
-
-        mediaRecorder.start();
-        isRecording = true;
-        recordBtn.textContent = "⏹️ Stop Recording";
-        recordBtn.style.backgroundColor = "#e63946"; // Màu đỏ
-        
-      } catch (err) {
-        console.error("Lỗi khi lấy micro:", err);
-        displayError("Không thể truy cập micro. Vui lòng cấp quyền.");
-      }
-    }
-  });
-
-  async function sendAudioToServer(audioBlob) {
-    output.innerHTML = '<div class="card"><p>⏳ Processing audio...</p></div>';
-    
-    // Sử dụng FormData để gửi file
-    const formData = new FormData();
-    formData.append("file", audioBlob, "recording.webm");
-
-    try {
-      const res = await fetch("/api/process-voice", { // Endpoint MỚI
-        method: "POST",
-        body: formData, // Không cần 'Content-Type', trình duyệt tự đặt
       });
       const data = await res.json();
       displayData(data);
     } catch (err) {
       displayError(err.message);
     }
+  });
+
+
+  // --- 3. XỬ LÝ NÚT GHI ÂM (Cập nhật) ---
+  recordBtn.addEventListener("click", async () => {
+    if (isRecording) {
+      // --- DỪNG GHI ÂM ---
+      if (mediaRecorder) {
+        mediaRecorder.stop(); // Dừng ghi âm file (luồng 2)
+      }
+      if (recognition) {
+        recognition.stop(); // Dừng nhận diện giọng nói (luồng 1)
+      }
+      
+      isRecording = false;
+      recordBtn.textContent = "🎤 Record (Click to Start)";
+      recordBtn.style.backgroundColor = "";
+
+    } else {
+      // --- BẮT ĐẦU GHI ÂM ---
+      if (!SpeechRecognition) {
+        displayError("Trình duyệt không hỗ trợ.", "Tính năng ghi âm real-time chỉ hoạt động trên Chrome, Edge, hoặc Safari.");
+        return;
+      }
+
+      try {
+        // Yêu cầu quyền micro
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // --- Bắt đầu Luồng 1: Nhận diện real-time ---
+        promptEl.value = ""; // Xóa text cũ
+        promptEl.placeholder = "Đang nghe... Vui lòng nói vào micro.";
+        recognition.start();
+
+        // --- Bắt đầu Luồng 2: Ghi âm file audio ---
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm; codecs=opus' });
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunks.push(event.data);
+        };
+
+        // Khi dừng, file audio sẽ được gửi đi
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm; codecs=opus' });
+          await sendAudioToServer(audioBlob); // Gửi file đi
+          stream.getTracks().forEach(track => track.stop()); // Tắt micro
+        };
+
+        mediaRecorder.start();
+
+        isRecording = true;
+        recordBtn.textContent = "⏹️ Stop Recording";
+        recordBtn.style.backgroundColor = "#e63946";
+        
+      } catch (err) {
+        // Lỗi này chủ yếu xảy ra khi người dùng chặn micro
+        console.error("Lỗi khi lấy micro:", err);
+        displayError("Không thể truy cập micro.", "Vui lòng cấp quyền micro cho trang web này.");
+      }
+    }
+  });
+
+  // --- 4. HÀM GỬI AUDIO (Giữ nguyên) ---
+  async function sendAudioToServer(audioBlob) {
+    output.innerHTML = '<div class="card"><p>⏳ Đang xử lý âm thanh (Speech-to-Text)...</p></div>';
+    
+    const formData = new FormData();
+    formData.append("file", audioBlob, "recording.webm");
+
+    try {
+      const res = await fetch("/api/process-voice", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      
+      // Hiển thị text đã nhận diện từ backend (để so sánh)
+      // promptEl.value = data.transcribed_text; // (Optional)
+      
+      displayData(data);
+    } catch (err) {
+      displayError(err.message);
+    }
   }
 
-  // --- 3. CÁC HÀM HIỂN THỊ (TÁCH RA) ---
-  
+  // --- 5. CÁC HÀM HIỂN THỊ (Giữ nguyên) ---
   function displayData(data) {
+    promptEl.placeholder = ""; // Reset placeholder
     if (data.error) {
       displayError(data.error, data.raw);
       return;
@@ -131,6 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function displayError(errorMessage, raw = "N/A") {
+    promptEl.placeholder = ""; // Reset placeholder
     output.innerHTML = `
       <div class="card error">
         <h3>Lỗi</h3>
@@ -147,4 +203,4 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/\n/g, "<br>");
   }
 
-});
+}); // <-- Đóng hàm DOMContentLoaded

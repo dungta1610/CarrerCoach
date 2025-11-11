@@ -82,17 +82,11 @@ class UserInput(BaseModel):
     prompt: str  # Đây sẽ là CÂU TRẢ LỜI của người dùng
 
 # --- 4. Tạo API Endpoint (ĐÃ CẬP NHẬT) ---
-@app.post("/api/gemini")
-async def handle_gemini_request(data: UserInput):
+async def get_gemini_evaluation(user_answer: str):
     """
-    Nhận CÂU TRẢ LỜI của người dùng (từ 'prompt' input),
-    gói nó vào một prompt đánh giá, gọi AI,
-    parse JSON trả về, và gửi JSON SẠCH cho frontend.
+    Hàm này chứa logic gọi Gemini mà chúng ta đã viết.
+    Nó nhận text (từ gõ chữ hoặc STT) và trả về JSON.
     """
-    
-    user_answer = data.prompt  # Lấy câu trả lời từ frontend
-
-    # Tạo Prompt (câu lệnh) cho AI, yêu cầu nó trả về JSON
     prompt_template = f"""
     Bạn là một AI Coach phỏng vấn tên là CareerCoach.
     Hãy phân tích input của người dùng và thực hiện MỘT trong hai tác vụ sau:
@@ -133,47 +127,28 @@ async def handle_gemini_request(data: UserInput):
     """
     
     try:
-        # 1. Gọi AI
         response = await model.generate_content_async(prompt_template)
-        
-        # 2. Xử lý response thô
         raw_text = response.text.strip()
         
-        # Tìm khối JSON (bao gồm cả trường hợp có hoặc không có ```json)
-        # re.DOTALL cho phép '.' khớp với cả ký tự xuống dòng
         match = re.search(r'```json\s*({.*?})\s*```|({.*?})', raw_text, re.DOTALL)
-        
         if match:
-            # Lấy nội dung JSON (ưu tiên group 1, nếu không có thì lấy group 2)
             json_str = match.group(1) or match.group(2)
-            
-            try:
-                # 3. Parse JSON
-                ai_data = json.loads(json_str)
-                
-                # 4. Gửi JSON đã parse (SẠCH) cho frontend
-                # app.js sẽ nhận { "feedback": "...", "score": 8, ... }
-                return JSONResponse(content=ai_data)
-                
-            except json.JSONDecodeError:
-                # Nếu JSON tìm thấy bị lỗi
-                return JSONResponse(
-                    status_code=500,
-                    content={"error": "AI trả về JSON không hợp lệ.", "raw": json_str}
-                )
+            ai_data = json.loads(json_str)
+            return JSONResponse(content=ai_data)
         else:
-            # Nếu không tìm thấy JSON (AI trả về text thường)
             return JSONResponse(
                 status_code=500,
                 content={"error": "Không thể tìm thấy nội dung JSON từ AI.", "raw": raw_text}
             )
-
     except Exception as e:
         print(f"Lỗi khi gọi AI: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Lỗi máy chủ: {e}"}
-        )
+        return JSONResponse(status_code=500, content={"error": f"Lỗi máy chủ: {e}"})
+@app.post("/api/gemini")
+async def handle_gemini_request(data: UserInput):
+    """
+    Nhận text prompt từ frontend.
+    """
+    return await get_gemini_evaluation(data.prompt)
 @app.post("/api/process-voice")
 async def handle_voice_request(file: UploadFile = File(...)):
     """
