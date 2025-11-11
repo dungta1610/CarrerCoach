@@ -1,0 +1,14 @@
+{
+  "name": "careercoach-gemini-test",
+  "version": "0.1.0",
+  "description": "Minimal test site + server to call Google Gemini (Generative Language) API",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.0.3",
+    "cors": "^2.8.5"
+  }
+}

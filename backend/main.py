@@ -1,0 +1,195 @@
+import os
+import google.generativeai as genai
+from fastapi import FastAPI, File, UploadFile
+from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
+from google.cloud import speech
+import sounddevice as sd
+import json
+import re  # Thư viện để xử lý văn bản (Regular Expressions)
+
+# --- 1. Tải API Key và Cấu hình Model AI ---
+load_dotenv()
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_SPEECH_KEY_FILE = "key.json"
+if not GOOGLE_API_KEY:
+    print("Lỗi: Không tìm thấy GOOGLE_API_KEY trong file .env")
+    # Cân nhắc raise Exception ở đây
+else:
+    genai.configure(api_key=GOOGLE_API_KEY)
+async def transcribe_audio(audio_content: bytes) -> str:
+    """
+    Sử dụng Google Cloud Speech-to-Text để chuyển file âm thanh (dạng bytes)
+    thành văn bản (text), sử dụng file key.json.
+    """
+    try:
+        # === THAY ĐỔI CHÍNH ===
+        # Khởi tạo client Bất đồng bộ (Async) 
+        # bằng file key của bạn
+        client = speech.SpeechAsyncClient.from_service_account_file(
+            GOOGLE_SPEECH_KEY_FILE
+        )
+        # ======================
+
+        # Cấu hình file âm thanh
+        audio = speech.RecognitionAudio(content=audio_content)
+        config = speech.RecognitionConfig(
+            encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
+            sample_rate_hertz=48000, # Phải khớp với file ghi âm
+            language_code="vi-VN", # Hoặc "en-US"
+            enable_automatic_punctuation=True,
+        )
+
+        print("Đang gửi audio đến Google Speech-to-Text...")
+        # Vẫn sử dụng 'await' vì client của chúng ta là 'SpeechAsyncClient'
+        operation = await client.long_running_recognize(config=config, audio=audio)
+        response = await operation.result(timeout=90) # Chờ kết quả
+
+        # Nối các kết quả lại
+        transcript = "".join(result.alternatives[0].transcript for result in response.results)
+        
+        if not transcript:
+            raise Exception("Không nhận diện được giọng nói.")
+            
+        print(f"Transcript: {transcript}")
+        return transcript
+
+    except FileNotFoundError:
+        print(f"LỖI NGHIÊM TRỌNG: Không tìm thấy file key '{GOOGLE_SPEECH_KEY_FILE}'")
+        print("Hãy chắc chắn rằng file 'key.json' nằm trong thư mục '/backend'.")
+        return f"(Lỗi server: Không tìm thấy file key STT.)"
+    except Exception as e:
+        print(f"Lỗi Speech-to-Text: {e}")
+        # Nếu lỗi, trả về text lỗi để Gemini phân tích
+        return f"(Lỗi khi xử lý âm thanh: {e})"
+# Cấu hình model
+generation_config = {"temperature": 0.7}
+safety_settings = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+]
+model = genai.GenerativeModel('gemini-2.5-flash-lite',
+                             generation_config=generation_config,
+                             safety_settings=safety_settings)
+
+# --- 2. Khởi tạo app FastAPI ---
+app = FastAPI()
+
+# --- 3. Định nghĩa kiểu dữ liệu Input (khớp với app.js) ---
+class UserInput(BaseModel):
+    prompt: str  # Đây sẽ là CÂU TRẢ LỜI của người dùng
+
+# --- 4. Tạo API Endpoint (ĐÃ CẬP NHẬT) ---
+@app.post("/api/gemini")
+async def handle_gemini_request(data: UserInput):
+    """
+    Nhận CÂU TRẢ LỜI của người dùng (từ 'prompt' input),
+    gói nó vào một prompt đánh giá, gọi AI,
+    parse JSON trả về, và gửi JSON SẠCH cho frontend.
+    """
+    
+    user_answer = data.prompt  # Lấy câu trả lời từ frontend
+
+    # Tạo Prompt (câu lệnh) cho AI, yêu cầu nó trả về JSON
+    prompt_template = f"""
+    Bạn là một AI Coach phỏng vấn tên là CareerCoach.
+    Hãy phân tích input của người dùng và thực hiện MỘT trong hai tác vụ sau:
+
+    **Tác vụ 1: Nếu input có vẻ là MỘT CÂU TRẢ LỜI PHỎNG VẤN**
+    (ví dụ: "Điểm yếu của tôi là...", "Tôi nghĩ mình phù hợp vì...", "Tôi xử lý mâu thuẫn bằng cách...")
+    
+    Hãy đánh giá câu trả lời đó. Format phản hồi của bạn dưới dạng JSON như sau (đảm bảo JSON hợp lệ, không có text nào bên ngoài cặp ngoặc {{}}):
+    {{
+      "type": "evaluation",
+      "feedback": "Nhận xét chi tiết về ưu/nhược điểm của câu trả lời.",
+      "score": "Chấm điểm trên thang 10 (ví dụ: 8)",
+      "suggested_answer": "Một câu trả lời mẫu lý tưởng cho câu hỏi mà bạn đoán người dùng đang trả lời."
+    }}
+
+    **Tác vụ 2: Nếu input có vẻ là MỘT CÂU HỎI hoặc MỘT YÊU CẦU**
+    (ví dụ: "Cho tôi lời khuyên...", "Làm thế nào để...", "Câu hỏi phỏng vấn phổ biến là gì?", "Give concise interview tips...")
+    
+     
+    Hãy trả lời câu hỏi hoặc yêu cầu đó. Format phản hồi của bạn dưới dạng JSON như sau (đảm bảo JSON hợp lệ, không có text nào bên ngoài cặp ngoặc {{}}):
+    {{
+      "type": "general_answer",
+      "response": "Câu trả lời của bạn cho câu hỏi/yêu cầu của người dùng."
+    }}
+    **Tác vụ 3: Nếu User muốn học về một lĩnh vực cụ thể**
+    (ví dụ: "Hãy giúp tôi luyện tập phỏng vấn cho vị trí kỹ sư phần mềm", "Tôi muốn học cách trả lời câu hỏi về quản lý thời gian", "Hãy cho tôi ví dụ về câu hỏi phỏng vấn cho vị trí marketing...")
+    Hãy trả lời câu hỏi hoặc yêu cầu đó bằng cách cho 1 đoạn prompt mẫu để hướng dẫn lộ trình học trên các LLMs và link các khóa học trên mạng liên quan như coursera, KhanAcademy,... . Format phản hồi của bạn dưới dạng JSON như sau (đảm bảo JSON hợp lệ, không có text nào bên ngoài cặp ngoặc {{}}):
+    {{
+      "type": "general_answer",
+      "response": "Câu trả lời của bạn cho câu hỏi/yêu cầu của người dùng."
+    }}
+    ---
+    **Input của người dùng:**
+    "{user_answer}"
+    ---
+    
+    Hãy chọn Tác vụ 1 hoặc Tác vụ 2 hoặc Tác vụ 3 và chỉ trả về JSON.
+    """
+    
+    try:
+        # 1. Gọi AI
+        response = await model.generate_content_async(prompt_template)
+        
+        # 2. Xử lý response thô
+        raw_text = response.text.strip()
+        
+        # Tìm khối JSON (bao gồm cả trường hợp có hoặc không có ```json)
+        # re.DOTALL cho phép '.' khớp với cả ký tự xuống dòng
+        match = re.search(r'```json\s*({.*?})\s*```|({.*?})', raw_text, re.DOTALL)
+        
+        if match:
+            # Lấy nội dung JSON (ưu tiên group 1, nếu không có thì lấy group 2)
+            json_str = match.group(1) or match.group(2)
+            
+            try:
+                # 3. Parse JSON
+                ai_data = json.loads(json_str)
+                
+                # 4. Gửi JSON đã parse (SẠCH) cho frontend
+                # app.js sẽ nhận { "feedback": "...", "score": 8, ... }
+                return JSONResponse(content=ai_data)
+                
+            except json.JSONDecodeError:
+                # Nếu JSON tìm thấy bị lỗi
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": "AI trả về JSON không hợp lệ.", "raw": json_str}
+                )
+        else:
+            # Nếu không tìm thấy JSON (AI trả về text thường)
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Không thể tìm thấy nội dung JSON từ AI.", "raw": raw_text}
+            )
+
+    except Exception as e:
+        print(f"Lỗi khi gọi AI: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Lỗi máy chủ: {e}"}
+        )
+@app.post("/api/process-voice")
+async def handle_voice_request(file: UploadFile = File(...)):
+    """
+    Nhận file âm thanh từ frontend.
+    """
+    print(f"Nhận file âm thanh: {file.filename}")
+    
+    # Đọc nội dung file
+    audio_content = await file.read()
+    
+    # 1. Chuyển đổi thành text
+    transcribed_text = await transcribe_audio(audio_content)
+    
+    # 2. Gửi text cho Gemini
+    return await get_gemini_evaluation(transcribed_text)
+# --- 5. Phục vụ Frontend Tĩnh ---
+app.mount("/", 
+          StaticFiles(directory="../frontend/public", html=True), 
+          name="public")
