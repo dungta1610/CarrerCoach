@@ -6,48 +6,33 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from google.cloud import speech
+from google.cloud import vision
 import sounddevice as sd
 import json
-import re  # Thư viện để xử lý văn bản (Regular Expressions)
+import re  
+from fastapi.concurrency import run_in_threadpool
 
-# --- 1. Tải API Key và Cấu hình Model AI ---
-load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GOOGLE_SPEECH_KEY_FILE = "key.json"
-if not GOOGLE_API_KEY:
-    print("Lỗi: Không tìm thấy GOOGLE_API_KEY trong file .env")
-    # Cân nhắc raise Exception ở đây
-else:
-    genai.configure(api_key=GOOGLE_API_KEY)
+GOOGLE_API_KEY = json.load(open("key/chatbot_key.json"))
+GOOGLE_SPEECH_KEY_FILE = "key/speech_key.json"
+VISION_KEY = "key/ocr_key.json"
+genai.configure(api_key=GOOGLE_API_KEY)
 async def transcribe_audio(audio_content: bytes) -> str:
-    """
-    Sử dụng Google Cloud Speech-to-Text để chuyển file âm thanh (dạng bytes)
-    thành văn bản (text), sử dụng file key.json.
-    """
     try:
-        # === THAY ĐỔI CHÍNH ===
-        # Khởi tạo client Bất đồng bộ (Async) 
-        # bằng file key của bạn
         client = speech.SpeechAsyncClient.from_service_account_file(
             GOOGLE_SPEECH_KEY_FILE
         )
-        # ======================
-
-        # Cấu hình file âm thanh
         audio = speech.RecognitionAudio(content=audio_content)
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
-            sample_rate_hertz=48000, # Phải khớp với file ghi âm
-            language_code="vi-VN", # Hoặc "en-US"
+            sample_rate_hertz=48000,
+            language_code="vi-VN", 
             enable_automatic_punctuation=True,
         )
 
         print("Đang gửi audio đến Google Speech-to-Text...")
-        # Vẫn sử dụng 'await' vì client của chúng ta là 'SpeechAsyncClient'
         operation = await client.long_running_recognize(config=config, audio=audio)
         response = await operation.result(timeout=90) # Chờ kết quả
 
-        # Nối các kết quả lại
         transcript = "".join(result.alternatives[0].transcript for result in response.results)
         
         if not transcript:
@@ -62,9 +47,7 @@ async def transcribe_audio(audio_content: bytes) -> str:
         return f"(Lỗi server: Không tìm thấy file key STT.)"
     except Exception as e:
         print(f"Lỗi Speech-to-Text: {e}")
-        # Nếu lỗi, trả về text lỗi để Gemini phân tích
         return f"(Lỗi khi xử lý âm thanh: {e})"
-# Cấu hình model
 generation_config = {"temperature": 0.7}
 safety_settings = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
@@ -74,14 +57,60 @@ model = genai.GenerativeModel('gemini-2.5-flash-lite',
                              generation_config=generation_config,
                              safety_settings=safety_settings)
 
-# --- 2. Khởi tạo app FastAPI ---
+def ocr_cv_file_sync(content: bytes, mime_type: str) -> str:
+    try:
+        client = vision.ImageAnnotatorClient.from_service_account_file(VISION_KEY)
+        
+        print(f"Đang xử lý file ({mime_type}) bằng Google Vision (Sync)...")
+        
+        if mime_type == "application/pdf" or mime_type == "image/tiff" or mime_type == "image/gif":
+            print("Đang dùng logic PDF/TIFF...")
+            input_config = vision.InputConfig(content=content, mime_type=mime_type)
+            features = [vision.Feature(type_=vision.Feature.Type.DOCUMENT_TEXT_DETECTION)]
+            file_request = vision.AnnotateFileRequest(input_config=input_config, features=features)
+            batch_request = vision.BatchAnnotateFilesRequest(requests=[file_request])
+            
+            response = client.batch_annotate_files(request=batch_request)
+            file_response = response.responses[0]
+            page_response = file_response.responses[0]
+            
+            if page_response.error.message:
+                raise Exception(f"Lỗi Vision API (PDF): {page_response.error.message}")
+            
+            if page_response.full_text_annotation:
+                return page_response.full_text_annotation.text
+            else:
+                return "Không tìm thấy văn bản trong file PDF."
+
+        elif mime_type == "image/png" or mime_type == "image/jpeg":
+            print("Đang dùng logic Ảnh (PNG/JPG)...")
+            image = vision.Image(content=content)
+            
+            response = client.document_text_detection(image=image)
+            
+            if response.error.message:
+                raise Exception(f"Lỗi Vision API (Ảnh): {response.error.message}")
+            
+            if response.full_text_annotation:
+                return response.full_text_annotation.text
+            else:
+                return "Không tìm thấy văn bản trong file ảnh."
+        
+        else:
+            return f"(Lỗi khi xử lý OCR: Không hỗ trợ MIME type '{mime_type}'. Chỉ hỗ trợ PDF, PNG, JPG, GIF, TIFF.)"
+
+    except FileNotFoundError:
+        print(f"LỖI NGHIÊM TRỌNG: Không tìm thấy file key '{VISION_KEY}'")
+        return f"(Lỗi server: Không tìm thấy file key OCR.)"
+    except Exception as e:
+        print(f"Lỗi OCR: {e}")
+        return f"(Lỗi khi xử lý OCR: {e})"
+
 app = FastAPI()
 
-# --- 3. Định nghĩa kiểu dữ liệu Input (khớp với app.js) ---
 class UserInput(BaseModel):
-    prompt: str  # Đây sẽ là CÂU TRẢ LỜI của người dùng
+    prompt: str 
 
-# --- 4. Tạo API Endpoint (ĐÃ CẬP NHẬT) ---
 async def get_gemini_evaluation(user_answer: str):
     """
     Hàm này chứa logic gọi Gemini mà chúng ta đã viết.
@@ -156,7 +185,6 @@ async def handle_voice_request(file: UploadFile = File(...)):
     """
     print(f"Nhận file âm thanh: {file.filename}")
     
-    # Đọc nội dung file
     audio_content = await file.read()
     
     # 1. Chuyển đổi thành text
@@ -164,7 +192,18 @@ async def handle_voice_request(file: UploadFile = File(...)):
     
     # 2. Gửi text cho Gemini
     return await get_gemini_evaluation(transcribed_text)
-# --- 5. Phục vụ Frontend Tĩnh ---
+@app.post("/api/upload-cv")
+async def handle_image_request(file: UploadFile = File(...)):
+    """_summary_
+    Lọc từ khóa trong pdf, png, jpg CV
+    """
+    content = await file.read()
+    mime_type = file.content_type
+    cv_text = await run_in_threadpool(ocr_cv_file_sync, content, mime_type)
+    
+    if "(Lỗi" in cv_text:
+        return JSONResponse(status_code=500, content={"error": cv_text})
+    return JSONResponse(content={"cv_text": cv_text})
 app.mount("/", 
           StaticFiles(directory="../frontend/public", html=True), 
           name="public")
