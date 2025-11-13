@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+google-generativeai
+google-cloud-speech
+python-dotenv
+sounddevice
+google-cloud-vision
+sounddevice
+pyaudio
+portaudio

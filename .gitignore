@@ -1,4 +1,7 @@
-key.json
+key/
+speech_key.json
+ocr_key.json
+chatbot_key.json
 .env
 __pycache__/
 .vscode/
