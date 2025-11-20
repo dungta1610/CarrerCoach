@@ -16,7 +16,8 @@ const CallPage: React.FC = () => {
 
   const getLLMResponse = async () => {
     setLLMResponse("Loading...");
-    const res = await fetch("/api/AIGenerate", {
+    // Update to call backend API endpoint
+    const res = await fetch("http://localhost:8000/your-endpoint", {
       method: "POST",
       headers: { "Content-type": "application/json" },
       body: JSON.stringify({ selectedOption }),
