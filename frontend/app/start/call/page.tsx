@@ -16,21 +16,31 @@ const CallPage: React.FC = () => {
 
   const getLLMResponse = async () => {
     setLLMResponse("Loading...");
-    // Update to call backend API endpoint
-    const res = await fetch("http://localhost:8000/your-endpoint", {
-      method: "POST",
-      headers: { "Content-type": "application/json" },
-      body: JSON.stringify({ selectedOption }),
-    });
+    // Call the new backend endpoint for generating questions
+    const res = await fetch(
+      `http://localhost:8000/api/generate-questions?job_title=${encodeURIComponent(
+        selectedOption
+      )}`,
+      { method: "POST" } // không cần body nữa
+    );
 
     const data = await res.json();
-    setLLMResponse(data.text ?? data.error ?? "No response");
+
+    // Nếu backend trả về array thuần:
+    const questions = Array.isArray(data) ? data : data.questions;
+
+    setLLMResponse(
+      Array.isArray(questions)
+        ? questions.join("\n")
+        : data.error ?? "No response"
+    );
+
     setLLMCalled(true);
   };
 
   useEffect(() => {
     if (llmCalled) {
-      const regex = /^\*\s+\[(Background|Situation|Technical)]\s+(.+?)\s*$/gm;
+      const regex = /^\*?\s*\[(Background|Situation|Technical)]\s+(.+?)\s*$/gm;
 
       let match: RegExpExecArray | null;
       type Category = "Background" | "Situation" | "Technical";
