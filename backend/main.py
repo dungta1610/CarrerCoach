@@ -12,7 +12,8 @@ import json
 import re  
 from fastapi.concurrency import run_in_threadpool 
 
-GOOGLE_API_KEY = json.load(open("key/chatbot_key.json"))["GOOGLE_API_KEY"]
+load_dotenv()
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_SPEECH_KEY_FILE = "key/speech_key.json"
 VISION_KEY = "key/ocr_key.json"
 if not GOOGLE_API_KEY:
@@ -209,6 +210,36 @@ async def handle_image_request(file: UploadFile = File(...)):
     if "(Lỗi" in cv_text:
         return JSONResponse(status_code=500, content={"error": cv_text})
     return JSONResponse(content={"cv_text": cv_text})
+@app.post ("/api/generate-questions")
+async def generate_questions(data: UserInput):
+    prompt_template = f"""
+    Bạn là một chuyên gia tuyển dụng nhân sự cấp cao.
+    Dựa trên văn bản CV và Tên công việc mục tiêu dưới đây, hãy tạo ra 5 câu hỏi phỏng vấn phù hợp.
+
+    Các câu hỏi phải đa dạng (kỹ thuật, hành vi, tình huống) và nhắm thẳng vào các kỹ năng
+    mà ứng viên này có (hoặc còn thiếu) cho công việc mục tiêu.
+    --- TÊN CÔNG VIỆC MỤC TIÊU ---
+    {job_title}
+    ---
+
+    Hãy trả về 5 câu hỏi dưới dạng một mảng JSON chứa các chuỗi (string).
+    Ví dụ: ["Câu hỏi 1", "Câu hỏi 2", "Câu hỏi 3", "Câu hỏi 4", "Câu hỏi 5"]
+
+    Chỉ trả về MỘT mảng JSON duy nhất.
+    """
+    response = await model.generate_content_async(prompt_template)
+    raw_text = response.text.strip()
+    match = re.search(r'```json\s*(\[.*?\])\s*```|(\[.*?\])', raw_text, re.DOTALL)
+    if match:
+        json_str = match.group(1) or match.group(2)
+        questions = json.loads(json_str)
+        return JSONResponse(content={"questions": questions})
+    else:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Không thể tìm thấy mảng JSON từ AI.", "raw": raw_text}
+        )
+    
 app.mount("/", 
           StaticFiles(directory="../frontend/public", html=True), 
           name="public")

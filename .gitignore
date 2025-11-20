@@ -11,3 +11,4 @@ dist/
 ocr.json
 import_jobs.py
 job_data.json
+key.json
