@@ -97,7 +97,7 @@ export default function Start() {
 
           <div className="mt-6 flex gap-3 justify-center">
             <a
-              href={`/start/call?selectedOption=${selectedOption}`}
+              href={`/InterviewWarmup/start/call?selectedOption=${selectedOption}`}
               className="w-full"
             >
               <button className="btn btn-primary w-full">Start</button>

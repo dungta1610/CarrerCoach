@@ -36,10 +36,10 @@ export default function InterviewStart() {
 
         <div className="navbar-end">
           <ul className="menu menu-horizontal px-1">
-            <li>
-              <a>Link</a>
+            <li className="text-xl text-transparent bg-clip-text bg-linear-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90%">
+              <a href="/CareerCoach">Career Dreamer</a>
             </li>
-            <li>
+            {/* <li>
               <details>
                 <summary>Parent</summary>
                 <ul className="bg-base-100 rounded-t-none p-2">
@@ -51,7 +51,7 @@ export default function InterviewStart() {
                   </li>
                 </ul>
               </details>
-            </li>
+            </li> */}
           </ul>
         </div>
       </div>
@@ -72,7 +72,7 @@ export default function InterviewStart() {
           Practice key questions, get insights about answers, and get more
           comfortable interviewing.
         </h2>
-        <a href="/start" className="mt-5">
+        <a href="/InterviewWarmup/start" className="mt-5">
           <button className="btn btn-info rounded-xl">Start practicing</button>
         </a>
       </div>
