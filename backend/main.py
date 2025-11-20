@@ -219,48 +219,6 @@ async def handle_image_request(file: UploadFile = File(...)):
     if "(Lỗi" in cv_text:
         return JSONResponse(status_code=500, content={"error": cv_text})
     return JSONResponse(content={"cv_text": cv_text})
-@app.post ("/api/generate-questions")
-async def generate_questions(job_title: str):
-    prompt_template = f"""
-    Bạn là một chuyên gia tuyển dụng nhân sự cấp cao.
-
-    Dựa trên TÊN CÔNG VIỆC MỤC TIÊU sau:
-    {job_title}
-
-    Hãy tạo ra tối thiểu 9 câu hỏi phỏng vấn bằng tiếng Anh
-    và CHIA THÀNH 3 NHÓM:
-
-    - [Background] ...  (hỏi về nền tảng, kinh nghiệm, học vấn)
-    - [Situation] ...   (câu hỏi tình huống, hành vi)
-    - [Technical] ...   (kiến thức chuyên môn)
-
-    YÊU CẦU ĐỊNH DẠNG:
-
-    1. TRẢ VỀ DUY NHẤT MỘT MẢNG JSON các chuỗi (string).
-    2. Mỗi phần tử trong mảng là một câu hỏi, và PHẢI bắt đầu bằng đúng một trong 3 tag:
-       "[Background]", "[Situation]" hoặc "[Technical]".
-       Ví dụ:
-       [
-         "[Background] Tell me about yourself.",
-         "[Situation] Describe a time you solved a difficult problem.",
-         "[Technical] Explain what a binary search tree is."
-       ]
-
-    3. Không dùng bullet markdown, không bọc trong ```json, không giải thích thêm.
-    """
-    response = await model.generate_content_async(prompt_template)
-    raw_text = response.text.strip()
-    match = re.search(r'(\[.*\])', raw_text, re.DOTALL)
-    if match:
-        json_str = match.group(1) or match.group(2)
-        questions = json.loads(json_str)
-        return JSONResponse(content={"questions": questions})
-    else:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Không thể tìm thấy mảng JSON từ AI.", "raw": raw_text}
-        )
-    
 app.mount("/", 
           StaticFiles(directory="../frontend/public", html=True), 
           name="public")
