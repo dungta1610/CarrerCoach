@@ -28,10 +28,15 @@ export default function Start() {
   const [org, setOrg] = useState("");
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [cvAdvice, setCvAdvice] = useState<string | null>(null);
 
   useEffect(() => {
     if (step === "loading") {
       const timer = setTimeout(() => setStep("tasks"), 2000);
+      return () => clearTimeout(timer);
+    }
+    if (step === "analyzing") {
+      const timer = setTimeout(() => setStep("advice"), 2000);
       return () => clearTimeout(timer);
     }
   }, [step]);
@@ -238,9 +243,95 @@ export default function Start() {
             </p>
           </div>
           <div className="mt-8 text-center">
-            <button className="btn btn-info btn-wide rounded-full text-white text-lg">
+            <button
+              className="btn btn-info btn-wide rounded-full text-white text-lg"
+              onClick={() => setStep("analyzing")}
+            >
               Explore paths 🚀
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP: Analyzing (Loading AI) */}
+      {step === "analyzing" && (
+        <div className="text-center animate-in fade-in duration-700">
+          <span className="loading loading-dots loading-lg text-info"></span>
+          <p className="text-3xl font-bold mt-6 animate-pulse text-gray-800">
+            Consulting AI Expert...
+          </p>
+          <p className="text-gray-500 mt-2">
+            Matching your profile with top industry standards
+          </p>
+        </div>
+      )}
+
+      {step === "advice" && (
+        <div className="w-full pt-32 max-w-3xl mx-auto">
+          <h2 className="text-3xl font-bold text-gray-800 mb-6">
+            Upload Your CV for Analysis
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Upload your CV and we`ll analyze it to provide personalized career
+            advice and interview preparation.
+          </p>
+
+          <div className="bg-gray-50 p-8 rounded-3xl shadow-sm border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors">
+            <div className="text-center">
+              <div className="text-6xl mb-4">📄</div>
+              <input
+                type="file"
+                id="cv-upload"
+                accept=".pdf,.doc,.docx,image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    // TODO: Handle file upload and send to backend for analysis
+                    console.log("File selected:", file.name);
+                    setCvAdvice(
+                      "Analyzing your CV... (Backend integration coming soon)"
+                    );
+                  }
+                }}
+              />
+              <label
+                htmlFor="cv-upload"
+                className="btn btn-primary btn-lg rounded-full px-12 cursor-pointer"
+              >
+                Choose CV File
+              </label>
+              <p className="text-sm text-gray-500 mt-4">
+                Supported formats: PDF, DOC, DOCX, PNG, JPG
+              </p>
+            </div>
+          </div>
+
+          {cvAdvice && (
+            <div className="mt-8 bg-blue-50 p-6 rounded-2xl border border-blue-200">
+              <div className="badge badge-info badge-lg mb-3">AI Analysis</div>
+              <p className="text-lg text-gray-700">{cvAdvice}</p>
+            </div>
+          )}
+
+          <div className="flex justify-between mt-8">
+            <button
+              className="btn btn-ghost btn-wide rounded-full text-lg"
+              onClick={() => setStep("result")}
+            >
+              Back
+            </button>
+            {cvAdvice && (
+              <button
+                className="btn btn-success btn-wide rounded-full text-lg text-white"
+                onClick={() => {
+                  // TODO: Navigate to next step or save results
+                  alert("CV analysis complete! Ready for interview prep.");
+                }}
+              >
+                Continue
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -20,12 +20,11 @@ const CallPage: React.FC = () => {
       `http://localhost:8000/api/generate-questions?job_title=${encodeURIComponent(
         selectedOption
       )}`,
-      { method: "POST" } // không cần body nữa
+      { method: "POST" }
     );
 
     const data = await res.json();
 
-    // Nếu backend trả về array thuần:
     const questions = Array.isArray(data) ? data : data.questions;
 
     setLLMResponse(
