@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 // import { GoogleGenAI } from "@google/genai";
 
 // const ai = new GoogleGenAI({
@@ -35,33 +36,20 @@ export default function Start() {
   return (
     <div className="flex flex-col">
       <div className="navbar bg-base-100 shadow-sm">
-        <div className="navbar-start"></div>
+        <div className="navbar-start">
+          <Link href="/" className="btn btn-ghost text-xl">
+            Back
+          </Link>
+        </div>
 
         <div className="navbar-center">
-          <a className="text-xl text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500">
+          <a className="text-2xl text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500">
             coach warmup
           </a>
         </div>
 
         <div className="navbar-end">
-          <ul className="menu menu-horizontal px-1">
-            <li>
-              <a>Link</a>
-            </li>
-            <li>
-              <details>
-                <summary>Parent</summary>
-                <ul className="bg-base-100 rounded-t-none p-2">
-                  <li>
-                    <a>Link 1</a>
-                  </li>
-                  <li>
-                    <a>Link 2</a>
-                  </li>
-                </ul>
-              </details>
-            </li>
-          </ul>
+          <ul className="menu menu-horizontal px-1"></ul>
         </div>
       </div>
 

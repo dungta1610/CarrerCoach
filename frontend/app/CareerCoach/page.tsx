@@ -1,32 +1,21 @@
+import Link from "next/link";
+
 export default function CareerCoachStart() {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col bg-slate-100">
       <div className="navbar bg-base-100 shadow-sm">
         <div className="navbar-start"></div>
 
         <div className="navbar-center">
-          <a className="text-xl text-transparent bg-clip-text bg-linear-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90%">
+          <a className="text-2xl text-transparent bg-clip-text bg-linear-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90%">
             career coach
           </a>
         </div>
 
         <div className="navbar-end">
           <ul className="menu menu-horizontal px-1">
-            <li>
-              <a>Link</a>
-            </li>
-            <li>
-              <details>
-                <summary>Parent</summary>
-                <ul className="bg-base-100 rounded-t-none p-2">
-                  <li>
-                    <a>Link 1</a>
-                  </li>
-                  <li>
-                    <a>Link 2</a>
-                  </li>
-                </ul>
-              </details>
+            <li className="text-xl text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500">
+              <Link href="/">Interview Warmup</Link>
             </li>
           </ul>
         </div>

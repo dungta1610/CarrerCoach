@@ -24,12 +24,12 @@ export default function InterviewStart() {
   }, [fields]);
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col bg-slate-100">
       <div className="navbar bg-base-100 shadow-sm">
         <div className="navbar-start" />
 
         <div className="navbar-center">
-          <a className="text-xl text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500">
+          <a className="text-2xl text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500">
             coach warmup
           </a>
         </div>
