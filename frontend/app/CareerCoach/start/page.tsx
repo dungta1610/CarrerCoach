@@ -23,12 +23,12 @@ const MOCK_SKILLS = [
 
 export default function Start() {
   const [step, setStep] = useState("intro");
-  const [modal, setModel] = useState("model");
   const [role, setRole] = useState("");
   const [org, setOrg] = useState("");
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [cvAdvice, setCvAdvice] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     if (step === "loading") {
@@ -141,7 +141,7 @@ export default function Start() {
       {step === "loading" && (
         <div className="text-center">
           <span className="loading loading-spinner loading-lg text-primary"></span>
-          <p className="text-2xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 mt-4">
+          <p className="text-2xl font-semibold text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500 mt-4">
             ✨ Generating insights...
           </p>
         </div>
@@ -202,9 +202,6 @@ export default function Start() {
                 {skill}
               </button>
             ))}
-            <button className="px-6 py-3 rounded-full border-2 border-dashed border-gray-300 text-gray-400 hover:border-gray-400">
-              More skills +
-            </button>
           </div>
           {selectedSkills.length < 3 && (
             <div className="text-red-500 text-lg font-semibold mt-6 text-center">
@@ -247,7 +244,7 @@ export default function Start() {
               className="btn btn-info btn-wide rounded-full text-white text-lg"
               onClick={() => setStep("analyzing")}
             >
-              Explore paths 🚀
+              Generate paths
             </button>
           </div>
         </div>
@@ -284,14 +281,76 @@ export default function Start() {
                 id="cv-upload"
                 accept=".pdf,.doc,.docx,image/*"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    // TODO: Handle file upload and send to backend for analysis
-                    console.log("File selected:", file.name);
-                    setCvAdvice(
-                      "Analyzing your CV... (Backend integration coming soon)"
-                    );
+                    setAnalyzing(true);
+                    setCvAdvice("Extracting text from your CV...");
+
+                    try {
+                      // Step 1: Upload CV for OCR
+                      const formData = new FormData();
+                      formData.append("file", file);
+
+                      const uploadRes = await fetch(
+                        "http://localhost:8000/api/upload-cv",
+                        {
+                          method: "POST",
+                          body: formData,
+                        }
+                      );
+
+                      const uploadData = await uploadRes.json();
+
+                      if (uploadData.error) {
+                        setCvAdvice(`Error: ${uploadData.error}`);
+                        setAnalyzing(false);
+                        return;
+                      }
+
+                      setCvAdvice("Analyzing your CV with AI...");
+
+                      // Step 2: Analyze CV with profile context
+                      const analysisRes = await fetch(
+                        "http://localhost:8000/api/analyze-cv",
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            cv_text: uploadData.cv_text,
+                            role: role,
+                            org: org,
+                            tasks: selectedTasks,
+                            skills: selectedSkills,
+                          }),
+                        }
+                      );
+
+                      const analysisData = await analysisRes.json();
+
+                      if (analysisData.error) {
+                        setCvAdvice(`Analysis Error: ${analysisData.error}`);
+                        setAnalyzing(false);
+                        return;
+                      }
+
+                      // Store results in sessionStorage and navigate to result page
+                      sessionStorage.setItem(
+                        "cvAnalysis",
+                        JSON.stringify(analysisData.analysis)
+                      );
+                      sessionStorage.setItem(
+                        "recommendedJobs",
+                        JSON.stringify(analysisData.recommended_jobs || [])
+                      );
+
+                      window.location.href = "/CareerCoach/start/result";
+                    } catch (error) {
+                      console.error("CV Analysis Error:", error);
+                      setCvAdvice("Failed to analyze CV. Please try again.");
+                    } finally {
+                      setAnalyzing(false);
+                    }
                   }
                 }}
               />
@@ -307,9 +366,18 @@ export default function Start() {
             </div>
           </div>
 
-          {cvAdvice && (
+          {/* Loading State */}
+          {analyzing && (
+            <div className="mt-8 text-center">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+              <p className="text-lg text-gray-600 mt-4">{cvAdvice}</p>
+            </div>
+          )}
+
+          {/* Simple Progress Message */}
+          {cvAdvice && !analyzing && (
             <div className="mt-8 bg-blue-50 p-6 rounded-2xl border border-blue-200">
-              <div className="badge badge-info badge-lg mb-3">AI Analysis</div>
+              <div className="badge badge-info badge-lg mb-3">Processing</div>
               <p className="text-lg text-gray-700">{cvAdvice}</p>
             </div>
           )}
@@ -317,21 +385,13 @@ export default function Start() {
           <div className="flex justify-between mt-8">
             <button
               className="btn btn-ghost btn-wide rounded-full text-lg"
-              onClick={() => setStep("result")}
+              onClick={() => {
+                setStep("result");
+                setCvAdvice(null);
+              }}
             >
               Back
             </button>
-            {cvAdvice && (
-              <button
-                className="btn btn-success btn-wide rounded-full text-lg text-white"
-                onClick={() => {
-                  // TODO: Navigate to next step or save results
-                  alert("CV analysis complete! Ready for interview prep.");
-                }}
-              >
-                Continue
-              </button>
-            )}
           </div>
         </div>
       )}
