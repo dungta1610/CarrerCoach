@@ -1,105 +1,156 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useLanguageWithMount } from "../../hooks/useLanguageWithMount";
-import { lazy, Suspense } from "react";
 
-export const dynamic = 'force-dynamic';
-
-const LanguageSwitcherComponent = lazy(() => import("../../components/LanguageSwitcher").then(mod => ({ default: mod.LanguageSwitcher })));
-
-const fields: string[] = [
-  "field.dataScience",
-  "field.machineLearning",
-  "field.computerSystems",
-  "field.computerScience",
-];
+interface AnalysisData {
+  extracted_role: string;
+  skills: string[];
+  selectedSkills?: string[];
+}
 
 export default function Start() {
-  const { t, mounted } = useLanguageWithMount();
-  const [selectedOption, setSelectedOption] = useState<string>("");
-  
-  const selectAction = (action: string) => {
-    setSelectedOption(() => {
-      console.log("Selected option:", action);
-      return action;
-    });
+  const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
+  const [customField, setCustomField] = useState("");
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+
+  useEffect(() => {
+    const data = localStorage.getItem("cvAnalysis");
+    if (data) {
+      setAnalysis(JSON.parse(data));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isGeneratingQuestions) {
+      // Redirect to call page after 500ms to start loading
+      const timer = setTimeout(() => {
+        window.location.href = "/InterviewWarmup/start/call";
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isGeneratingQuestions]);
+
+  const handleStart = () => {
+    const field = customField || analysis?.extracted_role || "General";
+    const skills = analysis?.selectedSkills || analysis?.skills || [];
+    
+    localStorage.setItem("interviewContext", JSON.stringify({
+      field,
+      role: analysis?.extracted_role || field,
+      skills,
+    }));
+    
+    setIsGeneratingQuestions(true);
   };
 
-  if (!mounted) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
-
-  // const [llmResponse, setLLMResponse] = useState<string>("Sample text");
-  // const getLLMResponse = async () => {
-  //   const response = await ai.models.generateContent({
-  //     model: "gemini-2.5-flash",
-  //     contents: `Create 20 interview questions for these fields: ${selectedOption}`,
-  //   });
-  //   setLLMResponse(response.text || "No response");
-  // };
-
   return (
-    <div className="flex flex-col">
-      <div className="navbar bg-base-100 shadow-sm">
-        <div className="navbar-start">
-          <Link href="/" className="btn btn-ghost text-xl">
-            {t("nav.back")}
+    <div className="min-h-screen bg-slate-50 p-8">
+      <div className="max-w-3xl mx-auto">
+        <div className="mb-8">
+          <Link href="/" className="btn btn-ghost mb-4">
+            ← Back to Home
           </Link>
-        </div>
-
-        <div className="navbar-center">
-          <a className="text-2xl text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500">
-            interview warmup
-          </a>
-        </div>
-
-        <div className="navbar-end">
-          <ul className="menu menu-horizontal px-1">
-            <li>
-              <Suspense fallback={null}>
-                <LanguageSwitcherComponent />
-              </Suspense>
-            </li>
-          </ul>
-        </div>
-      </div>
-
-      <div className="min-h-screen bg-slate-50">
-        <div className="w-full max-w-xl mx-auto px-6 pt-16">
-          <h1 className="text-center text-slate-700 text-2xl font-sans">
-            {t("warmupStart.question")}
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">
+            Interview Warmup
           </h1>
+          <p className="text-gray-600">
+            Practice interview questions based on your profile
+          </p>
+        </div>
 
-          <div className="space-y-3 mt-20">
-            {fields.map((fieldKey: string, idx: number) => (
-              <label
-                key={idx}
-                className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow transition"
-              >
-                <span className="flex items-center gap-3">
+        <div className="bg-white p-8 rounded-2xl shadow-lg">
+          {analysis ? (
+            <div className="space-y-6">
+              <div className="bg-blue-50 p-6 rounded-xl border border-blue-200">
+                <div className="badge badge-primary badge-lg mb-3">Your Profile</div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                  {analysis.extracted_role}
+                </h3>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {(analysis.selectedSkills || analysis.skills).slice(0, 5).map((skill, idx) => (
+                    <span key={idx} className="badge badge-outline">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Customize field (optional):
+                </label>
+                <input
+                  type="text"
+                  value={customField}
+                  onChange={(e) => setCustomField(e.target.value)}
+                  placeholder={`Default: ${analysis.extracted_role}`}
+                  className="input input-bordered w-full"
+                />
+              </div>
+
+              {isGeneratingQuestions ? (
+                <div className="text-center py-8">
+                  <span className="loading loading-spinner loading-lg text-primary"></span>
+                  <p className="text-lg text-gray-600 mt-4">Generating interview questions...</p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleStart}
+                  className="btn btn-lg btn-block" 
+                  style={{backgroundColor: '#9333ea', color: 'white', borderColor: '#9333ea'}}
+                >
+                  Start Interview Practice
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <svg className="w-24 h-24 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h2 className="text-2xl font-bold text-gray-700 mb-2">
+                No Profile Found
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Please complete Phase 1 (Career Dreamer) first to get personalized interview questions.
+              </p>
+              <div className="space-y-4">
+                <Link
+                  href="/CareerCoach/start"
+                  className="btn btn-primary btn-block"
+                >
+                  Go to Phase 1
+                </Link>
+                <div className="divider">OR</div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Enter a field to practice:
+                  </label>
                   <input
-                    type="radio"
-                    name="radio-1"
-                    className="radio"
-                    value={t(fieldKey)}
-                    onChange={(e) => selectAction(e.currentTarget.value)}
+                    type="text"
+                    value={customField}
+                    onChange={(e) => setCustomField(e.target.value)}
+                    placeholder="e.g., Software Engineer, Marketing Manager"
+                    className="input input-bordered w-full mb-4"
                   />
-                  <span className="text-slate-800">{t(fieldKey)}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-
-          <div className="mt-6 flex gap-3 justify-center">
-            <a
-              href={`/InterviewWarmup/start/call?selectedOption=${selectedOption}`}
-              className="w-full"
-            >
-              <button className="btn btn-primary w-full">{t("warmupStart.start")}</button>
-            </a>
-          </div>
+                  {isGeneratingQuestions ? (
+                    <div className="text-center py-4">
+                      <span className="loading loading-spinner loading-md text-primary"></span>
+                      <p className="text-sm text-gray-600 mt-2">Generating questions...</p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleStart}
+                      className="btn btn-outline btn-block"
+                    >
+                      Start with Custom Field
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

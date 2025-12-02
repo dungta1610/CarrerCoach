@@ -20,6 +20,9 @@ const translations: Record<Language, Record<string, string>> = {
     "nav.warmup": "Interview Warmup",
     "nav.career": "Career Coach",
     "nav.back": "Back",
+    "nav.dashboard": "Dashboard",
+    "nav.jobs": "Job Matching",
+    "nav.profile": "Profile",
     
     // Home page
     "home.title": "interview",
@@ -61,6 +64,7 @@ const translations: Record<Language, Record<string, string>> = {
     "careerStart.supportedFormats": "Supported formats: PDF, DOC, DOCX, PNG, JPG",
     "careerStart.aiAnalysis": "AI Analysis",
     "careerStart.continue": "Continue",
+    "careerStart.generatePaths": "Generate paths",
     
     // Interview Warmup Start
     "warmupStart.question": "What field do you want to practice for?",
@@ -76,6 +80,48 @@ const translations: Record<Language, Record<string, string>> = {
     "call.noBackground": "No background questions yet",
     "call.noSituation": "No situation questions yet",
     "call.noTechnical": "No technical questions yet",
+    
+    // Job Matching
+    "jobs.title": "Job Matching",
+    "jobs.subtitle": "Find jobs that match your skills and experience",
+    "jobs.matchScore": "Match Score",
+    "jobs.requiredSkills": "Required Skills",
+    "jobs.missingSkills": "Skills to Improve",
+    "jobs.viewDetails": "View Details",
+    "jobs.apply": "Apply Now",
+    "jobs.noJobs": "No matching jobs found",
+    "jobs.loading": "Loading jobs...",
+    "jobs.company": "Company",
+    "jobs.location": "Location",
+    "jobs.salary": "Salary",
+    "jobs.type": "Job Type",
+    "jobs.experience": "Experience Required",
+    
+    // Dashboard
+    "dashboard.title": "My Dashboard",
+    "dashboard.welcome": "Welcome back",
+    "dashboard.profile": "Profile Overview",
+    "dashboard.progress": "Progress Tracking",
+    "dashboard.interviews": "Interview Sessions",
+    "dashboard.jobs": "Job Applications",
+    "dashboard.learning": "Learning Path",
+    "dashboard.stats": "Statistics",
+    "dashboard.sessionsCompleted": "Sessions Completed",
+    "dashboard.averageScore": "Average Score",
+    "dashboard.skillsImproved": "Skills Improved",
+    "dashboard.jobsApplied": "Jobs Applied",
+    
+    // Learning Path
+    "learning.title": "Learning Path",
+    "learning.subtitle": "Personalized recommendations based on your skill gaps",
+    "learning.recommended": "Recommended Resources",
+    "learning.inProgress": "In Progress",
+    "learning.completed": "Completed",
+    "learning.duration": "Duration",
+    "learning.difficulty": "Difficulty",
+    "learning.startLearning": "Start Learning",
+    "learning.continue": "Continue",
+    "learning.markComplete": "Mark as Complete",
     
     // Fields
     "field.dataScience": "Data Science",
@@ -100,6 +146,17 @@ const translations: Record<Language, Record<string, string>> = {
     "task.manage": "Manage and secure IT assets and data.",
     "task.collaborate": "Collaborate with stakeholders to understand technology needs.",
     
+    // Common
+    "common.save": "Save",
+    "common.cancel": "Cancel",
+    "common.delete": "Delete",
+    "common.edit": "Edit",
+    "common.loading": "Loading...",
+    "common.error": "Error",
+    "common.success": "Success",
+    "common.confirm": "Confirm",
+    "common.close": "Close",
+    
     // Language
     "lang.en": "English",
     "lang.vi": "Tiếng Việt",
@@ -109,6 +166,9 @@ const translations: Record<Language, Record<string, string>> = {
     "nav.warmup": "Interview Warmup",
     "nav.career": "Career Coach",
     "nav.back": "Quay lại",
+    "nav.dashboard": "Bảng điều khiển",
+    "nav.jobs": "Tìm việc phù hợp",
+    "nav.profile": "Hồ sơ",
     
     // Home page
     "home.title": "luyện tập",
@@ -150,6 +210,7 @@ const translations: Record<Language, Record<string, string>> = {
     "careerStart.supportedFormats": "Định dạng hỗ trợ: PDF, DOC, DOCX, PNG, JPG",
     "careerStart.aiAnalysis": "Phân tích AI",
     "careerStart.continue": "Tiếp tục",
+    "careerStart.generatePaths": "Tạo đường đi",
     
     // Interview Warmup Start
     "warmupStart.question": "Bạn muốn luyện tập cho lĩnh vực nào?",
@@ -165,6 +226,48 @@ const translations: Record<Language, Record<string, string>> = {
     "call.noBackground": "Chưa có câu hỏi nền tảng",
     "call.noSituation": "Chưa có câu hỏi tình huống",
     "call.noTechnical": "Chưa có câu hỏi kỹ thuật",
+    
+    // Job Matching
+    "jobs.title": "Tìm việc phù hợp",
+    "jobs.subtitle": "Tìm công việc phù hợp với kỹ năng và kinh nghiệm của bạn",
+    "jobs.matchScore": "Điểm phù hợp",
+    "jobs.requiredSkills": "Kỹ năng yêu cầu",
+    "jobs.missingSkills": "Kỹ năng cần cải thiện",
+    "jobs.viewDetails": "Xem chi tiết",
+    "jobs.apply": "Ứng tuyển ngay",
+    "jobs.noJobs": "Không tìm thấy công việc phù hợp",
+    "jobs.loading": "Đang tải công việc...",
+    "jobs.company": "Công ty",
+    "jobs.location": "Địa điểm",
+    "jobs.salary": "Lương",
+    "jobs.type": "Loại công việc",
+    "jobs.experience": "Kinh nghiệm yêu cầu",
+    
+    // Dashboard
+    "dashboard.title": "Bảng điều khiển",
+    "dashboard.welcome": "Chào mừng trở lại",
+    "dashboard.profile": "Tổng quan hồ sơ",
+    "dashboard.progress": "Theo dõi tiến độ",
+    "dashboard.interviews": "Buổi phỏng vấn",
+    "dashboard.jobs": "Đơn xin việc",
+    "dashboard.learning": "Lộ trình học tập",
+    "dashboard.stats": "Thống kê",
+    "dashboard.sessionsCompleted": "Buổi đã hoàn thành",
+    "dashboard.averageScore": "Điểm trung bình",
+    "dashboard.skillsImproved": "Kỹ năng đã cải thiện",
+    "dashboard.jobsApplied": "Việc đã ứng tuyển",
+    
+    // Learning Path
+    "learning.title": "Lộ trình học tập",
+    "learning.subtitle": "Đề xuất cá nhân hóa dựa trên khoảng trống kỹ năng của bạn",
+    "learning.recommended": "Tài nguyên đề xuất",
+    "learning.inProgress": "Đang học",
+    "learning.completed": "Đã hoàn thành",
+    "learning.duration": "Thời lượng",
+    "learning.difficulty": "Độ khó",
+    "learning.startLearning": "Bắt đầu học",
+    "learning.continue": "Tiếp tục",
+    "learning.markComplete": "Đánh dấu hoàn thành",
     
     // Fields
     "field.dataScience": "Khoa học dữ liệu",
@@ -188,6 +291,17 @@ const translations: Record<Language, Record<string, string>> = {
     "task.support": "Cung cấp hỗ trợ kỹ thuật và hướng dẫn cho người dùng cuối.",
     "task.manage": "Quản lý và bảo mật tài sản và dữ liệu CNTT.",
     "task.collaborate": "Hợp tác với các bên liên quan để hiểu nhu cầu công nghệ.",
+    
+    // Common
+    "common.save": "Lưu",
+    "common.cancel": "Hủy",
+    "common.delete": "Xóa",
+    "common.edit": "Chỉnh sửa",
+    "common.loading": "Đang tải...",
+    "common.error": "Lỗi",
+    "common.success": "Thành công",
+    "common.confirm": "Xác nhận",
+    "common.close": "Đóng",
     
     // Language
     "lang.en": "English",

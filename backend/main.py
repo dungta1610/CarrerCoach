@@ -99,9 +99,11 @@ def ocr_cv_file_sync(content: bytes, mime_type: str) -> str:
         
         print(f"Đang xử lý file ({mime_type}) bằng Google Vision (Sync)...")
         
-        if mime_type == "application/pdf" or mime_type == "image/tiff" or mime_type == "image/gif":
-            print("Đang dùng logic PDF/TIFF...")
-            input_config = vision.InputConfig(content=content, mime_type=mime_type)
+        if mime_type == "application/pdf" or mime_type == "image/tiff" or mime_type == "image/gif" or mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            print("Đang dùng logic PDF/TIFF/DOCX...")
+            # For DOCX, treat as PDF
+            actual_mime = "application/pdf" if "wordprocessingml" in mime_type else mime_type
+            input_config = vision.InputConfig(content=content, mime_type=actual_mime)
             features = [vision.Feature(type_=vision.Feature.Type.DOCUMENT_TEXT_DETECTION)]
             file_request = vision.AnnotateFileRequest(input_config=input_config, features=features)
             batch_request = vision.BatchAnnotateFilesRequest(requests=[file_request])
@@ -112,12 +114,12 @@ def ocr_cv_file_sync(content: bytes, mime_type: str) -> str:
             page_response = file_response.responses[0] # Lấy trang đầu tiên
             
             if page_response.error.message:
-                raise Exception(f"Lỗi Vision API (PDF): {page_response.error.message}")
+                raise Exception(f"Lỗi Vision API (PDF/DOCX): {page_response.error.message}")
             
             if page_response.full_text_annotation:
                 return page_response.full_text_annotation.text
             else:
-                return "Không tìm thấy văn bản trong file PDF."
+                return "Không tìm thấy văn bản trong file."
 
         elif mime_type == "image/png" or mime_type == "image/jpeg":
             print("Đang dùng logic Ảnh (PNG/JPG)...")
@@ -134,7 +136,7 @@ def ocr_cv_file_sync(content: bytes, mime_type: str) -> str:
                 return "Không tìm thấy văn bản trong file ảnh."
         
         else:
-            return f"(Lỗi khi xử lý OCR: Không hỗ trợ MIME type '{mime_type}'. Chỉ hỗ trợ PDF, PNG, JPG, GIF, TIFF.)"
+            return f"(Lỗi khi xử lý OCR: Không hỗ trợ MIME type '{mime_type}'. Chỉ hỗ trợ PDF, PNG, JPG, GIF, TIFF, DOCX.)"
 
     except FileNotFoundError:
         print(f"LỖI NGHIÊM TRỌNG: Không tìm thấy file key '{VISION_KEY}'")
@@ -156,6 +158,19 @@ app.add_middleware(
 
 class UserInput(BaseModel):
     prompt: str
+
+class CVAnalysisRequest(BaseModel):
+    cv_text: str
+    role: str = ""
+    organization: str = ""
+
+class CVGenerationRequest(BaseModel):
+    role: str
+    skills: list[str]
+    experience: str
+    education: str
+    achievements: list[str] = []
+
 async def get_gemini_evaluation(user_answer: str):
     """
     Hàm này chứa logic gọi Gemini mà chúng ta đã viết.
@@ -171,8 +186,7 @@ async def get_gemini_evaluation(user_answer: str):
     Hãy đánh giá câu trả lời đó. Format phản hồi của bạn dưới dạng JSON như sau (đảm bảo JSON hợp lệ, không có text nào bên ngoài cặp ngoặc {{}}):
     {{
       "type": "evaluation",
-      "feedback": "Nhận xét chi tiết về ưu/nhược điểm của câu trả lời.",
-      "score": "Chấm điểm trên thang 10 (ví dụ: 8)",
+      "feedback": "Nhận xét chi tiết về ưu/nhược điểm của câu trả lời, gợi ý cải thiện.",
       "suggested_answer": "Một câu trả lời mẫu lý tưởng cho câu hỏi mà bạn đoán người dùng đang trả lời."
     }}
 
@@ -242,46 +256,158 @@ async def handle_image_request(file: UploadFile = File(...)):
     if "(Lỗi" in cv_text:
         return JSONResponse(status_code=500, content={"error": cv_text})
     return JSONResponse(content={"cv_text": cv_text})
-@app.post ("/api/generate-questions")
-async def generate_questions(job_title: str):
+
+@app.post("/api/analyze-cv")
+async def analyze_cv(data: CVAnalysisRequest):
+    """
+    Analyze CV text and extract: role, skills, experience, pros/cons, learning path
+    """
     prompt_template = f"""
-    Bạn là một chuyên gia tuyển dụng nhân sự cấp cao.
+    You are an expert career coach and resume analyzer.
+    
+    Analyze the following CV text and extract comprehensive insights:
+    
+    CV TEXT:
+    {data.cv_text}
+    
+    TARGET ROLE (if provided): {data.role or 'Not specified'}
+    TARGET ORGANIZATION (if provided): {data.organization or 'Not specified'}
+    
+    Provide a detailed analysis in JSON format with the following structure:
+    {{
+      "extracted_role": "Primary role/position based on CV (e.g., 'Software Engineer', 'Marketing Manager')",
+      "skills": ["skill1", "skill2", "skill3", ...],
+      "experience_years": "Estimated years of experience",
+      "experience_summary": "Brief summary of work experience",
+      "education": "Education background",
+      "strengths": ["strength1", "strength2", ...],
+      "weaknesses": ["area1 to improve", "area2 to improve", ...],
+      "learning_path": {{
+        "immediate": ["skill or area to learn immediately"],
+        "short_term": ["skills for next 3-6 months"],
+        "long_term": ["skills for 6-12 months"]
+      }},
+      "recommended_tasks": ["task1", "task2", ...]
+    }}
+    
+    Return ONLY the JSON object, no additional text.
+    """
+    
+    try:
+        response = await model.generate_content_async(prompt_template)
+        raw_text = response.text.strip()
+        
+        match = re.search(r'```json\s*({.*?})\s*```|({.*?})', raw_text, re.DOTALL)
+        if match:
+            json_str = match.group(1) or match.group(2)
+            analysis_data = json.loads(json_str)
+            return JSONResponse(content=analysis_data)
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Could not parse AI response", "raw": raw_text}
+            )
+    except Exception as e:
+        print(f"Error in CV analysis: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
-    Dựa trên TÊN CÔNG VIỆC MỤC TIÊU sau:
-    {job_title}
+@app.post("/api/generate-cv")
+async def generate_cv(data: CVGenerationRequest):
+    """
+    Generate a sample CV in markdown format based on user profile
+    """
+    skills_list = ", ".join(data.skills)
+    achievements_list = "\n".join([f"- {a}" for a in data.achievements]) if data.achievements else "- [Add your achievements]"
+    
+    prompt_template = f"""
+    You are an expert CV/resume writer.
+    
+    Create a professional CV in Markdown format for a candidate with the following profile:
+    
+    ROLE: {data.role}
+    SKILLS: {skills_list}
+    EXPERIENCE: {data.experience}
+    EDUCATION: {data.education}
+    ACHIEVEMENTS:
+    {achievements_list}
+    
+    Generate a complete, professional CV in Markdown format with the following sections:
+    - Header with name and contact (use placeholders)
+    - Professional Summary
+    - Skills
+    - Work Experience
+    - Education
+    - Achievements
+    - Additional relevant sections
+    
+    Make it ATS-friendly and professional. Use proper Markdown formatting.
+    Return ONLY the Markdown content, no JSON, no code blocks.
+    """
+    
+    try:
+        response = await model.generate_content_async(prompt_template)
+        cv_markdown = response.text.strip()
+        
+        # Remove markdown code blocks if present
+        cv_markdown = re.sub(r'^```markdown\s*', '', cv_markdown)
+        cv_markdown = re.sub(r'```\s*$', '', cv_markdown)
+        
+        return JSONResponse(content={"cv_markdown": cv_markdown})
+    except Exception as e:
+        print(f"Error in CV generation: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
-    Hãy tạo ra tối thiểu 30 câu hỏi phỏng vấn bằng tiếng Anh
-    và CHIA THÀNH 3 NHÓM, mỗi NHÓM 10 câu hỏi:
+class QuestionGenerationRequest(BaseModel):
+    field: str
+    role: str = ""
+    skills: list[str] = []
 
-    - [Background] ...  (hỏi về nền tảng, kinh nghiệm, học vấn)
-    - [Situation] ...   (câu hỏi tình huống, hành vi)
-    - [Technical] ...   (kiến thức chuyên môn)
+@app.post("/api/generate-questions")
+async def generate_questions(data: QuestionGenerationRequest):
+    skills_text = ", ".join(data.skills) if data.skills else "general professional skills"
+    role_text = data.role or data.field
+    
+    prompt_template = f"""
+    You are a senior HR recruitment expert.
 
-    YÊU CẦU ĐỊNH DẠNG:
+    Based on the following profile:
+    - TARGET ROLE: {role_text}
+    - FIELD: {data.field}
+    - KEY SKILLS: {skills_text}
 
-    1. TRẢ VỀ DUY NHẤT MỘT MẢNG JSON các chuỗi (string).
-    2. Mỗi phần tử trong mảng là một câu hỏi, và PHẢI bắt đầu bằng đúng một trong 3 tag:
-       "[Background]", "[Situation]" hoặc "[Technical]".
-       Ví dụ:
+    Generate AT LEAST 30 personalized interview questions in English
+    DIVIDED INTO 3 GROUPS, each with 10 questions:
+
+    - [Background] ...  (questions about background, experience, education)
+    - [Situation] ...   (behavioral/situational questions)
+    - [Technical] ...   (technical/professional knowledge specific to the role and skills)
+
+    REQUIREMENTS:
+
+    1. RETURN ONLY A JSON ARRAY of strings.
+    2. Each element in the array is one question, and MUST start with exactly one of these 3 tags:
+       "[Background]", "[Situation]", or "[Technical]".
+       Examples:
        [
-         "[Background] Tell me about yourself.",
-         "[Situation] Describe a time you solved a difficult problem.",
-         "[Technical] Explain what a binary search tree is."
+         "[Background] Tell me about your experience with {skills_text.split(',')[0] if data.skills else 'your field'}.",
+         "[Situation] Describe a time you solved a difficult problem using {skills_text.split(',')[0] if data.skills else 'your skills'}.",
+         "[Technical] Explain {skills_text.split(',')[0] if data.skills else 'a key concept in your field'}."
        ]
 
-    3. Không dùng bullet markdown, không bọc trong ```json, không giải thích thêm.
+    3. Make questions SPECIFIC to the role and skills provided.
+    4. Do not use markdown bullets, do not wrap in ```json, no extra explanations.
     """
     response = await model.generate_content_async(prompt_template)
     raw_text = response.text.strip()
     match = re.search(r'(\[.*\])', raw_text, re.DOTALL)
     if match:
-        json_str = match.group(1) or match.group(2)
+        json_str = match.group(1)
         questions = json.loads(json_str)
         return JSONResponse(content={"questions": questions})
     else:
         return JSONResponse(
             status_code=500,
-            content={"error": "Không thể tìm thấy mảng JSON từ AI.", "raw": raw_text}
+            content={"error": "Could not find JSON array from AI.", "raw": raw_text}
         )
     
 app.mount("/", 

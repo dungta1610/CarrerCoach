@@ -1,24 +1,207 @@
 "use client";
 
 import React from "react";
-import { useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import { useLanguageWithMount } from "../../../hooks/useLanguageWithMount";
-import { lazy, Suspense } from "react";
+import Link from "next/link";
 
-export const dynamic = 'force-dynamic';
+interface InterviewContext {
+  field: string;
+  role: string;
+  skills: string[];
+}
 
-const LanguageSwitcherComponent = lazy(() => import("../../../components/LanguageSwitcher").then(mod => ({ default: mod.LanguageSwitcher })));
-
-const CallPageContent: React.FC = () => {
-  const { t, mounted } = useLanguageWithMount();
-  const searchParams = useSearchParams();
-  const selectedOption = searchParams.get("selectedOption") || "";
+const CallPage: React.FC = () => {
+  const [context, setContext] = useState<InterviewContext | null>(null);
   const [llmResponse, setLLMResponse] = useState<string>("");
   const [llmCalled, setLLMCalled] = useState<boolean>(false);
   const [backgroundQuestions, setBackgroundQuestions] = useState<string[]>([]);
   const [situationQuestions, setsituationQuestions] = useState<string[]>([]);
   const [technicalQuestions, settechnicalQuestions] = useState<string[]>([]);
+  
+  // Speech-to-text state
+  const [isRecording, setIsRecording] = useState<{ [key: string]: boolean }>({});
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+
+  useEffect(() => {
+    const data = localStorage.getItem("interviewContext");
+    if (data) {
+      const parsedContext = JSON.parse(data);
+      setContext(parsedContext);
+      // Auto-generate questions when page loads
+      if (!llmCalled) {
+        setTimeout(() => {
+          generateQuestions(parsedContext);
+        }, 500);
+      }
+    } else {
+      setContext({ field: "General", role: "Professional", skills: [] });
+    }
+  }, []);
+
+  // Store answers for each question
+  const [answers, setAnswers] = useState<{ [key: string]: string }>({});
+  // Store AI feedback for each question
+  const [feedback, setFeedback] = useState<{
+    [key: string]: { advice: string; suggested_answer?: string };
+  }>({});
+  // Track which questions are being evaluated
+  const [evaluating, setEvaluating] = useState<{ [key: string]: boolean }>({});
+
+  const handleAnswerChange = (
+    category: string,
+    index: number,
+    value: string
+  ) => {
+    const key = `${category}-${index}`;
+    setAnswers((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmitAnswer = async (
+    category: string,
+    index: number,
+    question: string
+  ) => {
+    const key = `${category}-${index}`;
+    const answer = answers[key];
+
+    if (!answer || answer.trim() === "") {
+      alert("Please provide an answer before submitting!");
+      return;
+    }
+
+    setEvaluating((prev) => ({ ...prev, [key]: true }));
+
+    try {
+      // Call backend API to evaluate the answer
+      const res = await fetch("http://localhost:8000/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: answer }),
+      });
+
+      const data = await res.json();
+
+      // Extract feedback from the response
+      if (data.type === "evaluation") {
+        setFeedback((prev) => ({
+          ...prev,
+          [key]: {
+            advice: data.feedback || "No feedback provided",
+            suggested_answer: data.suggested_answer,
+          },
+        }));
+      } else {
+        // If AI didn't recognize it as an interview answer
+        setFeedback((prev) => ({
+          ...prev,
+          [key]: {
+            advice:
+              data.response ||
+              "Please provide a more detailed answer to the interview question.",
+          },
+        }));
+      }
+    } catch (error) {
+      console.error("Error evaluating answer:", error);
+      alert("Failed to evaluate answer. Please try again.");
+    } finally {
+      setEvaluating((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleVoiceInput = async (category: string, index: number) => {
+    const key = `${category}-${index}`;
+    
+    if (isRecording[key]) {
+      // Stop recording
+      if (mediaRecorder) {
+        mediaRecorder.stop();
+      }
+      setIsRecording((prev) => ({ ...prev, [key]: false }));
+      return;
+    }
+
+    try {
+      // Start recording
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+
+      recorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'audio.webm');
+
+        try {
+          const res = await fetch("http://localhost:8000/api/process-voice", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await res.json();
+          if (data.transcription) {
+            setAnswers((prev) => ({
+              ...prev,
+              [key]: (prev[key] || "") + " " + data.transcription,
+            }));
+          } else {
+            alert("Failed to transcribe audio. Please try again.");
+          }
+        } catch (error) {
+          console.error("Error transcribing audio:", error);
+          alert("Failed to transcribe audio. Please try again.");
+        }
+
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording((prev) => ({ ...prev, [key]: true }));
+    } catch (error) {
+      console.error("Error accessing microphone:", error);
+      alert("Failed to access microphone. Please check your permissions.");
+    }
+  };
+
+  const generateQuestions = async (contextData: InterviewContext) => {
+    setLLMResponse("Loading...");
+    try {
+      const res = await fetch("http://localhost:8000/api/generate-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          field: contextData.field,
+          role: contextData.role,
+          skills: contextData.skills,
+        }),
+      });
+
+      const data = await res.json();
+      const questions = Array.isArray(data) ? data : data.questions;
+
+      setLLMResponse(
+        Array.isArray(questions)
+          ? questions.join("\n")
+          : data.error ?? "No response"
+      );
+
+      setLLMCalled(true);
+    } catch (error) {
+      console.error("Error generating questions:", error);
+      setLLMResponse("Error generating questions. Please try again.");
+      setLLMCalled(true);
+    }
+  };
+
+  const getLLMResponse = async () => {
+    if (!context) return;
+    generateQuestions(context);
+  };
 
   useEffect(() => {
     if (llmCalled) {
@@ -48,141 +231,462 @@ const CallPageContent: React.FC = () => {
         }
       }
 
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBackgroundQuestions(bgques);
       setsituationQuestions(sitques);
       settechnicalQuestions(tecques);
     }
   }, [llmResponse, llmCalled]);
 
-  const getLLMResponse = async () => {
-    setLLMResponse("Loading...");
-    const res = await fetch(
-      `http://localhost:8000/api/generate-questions?job_title=${encodeURIComponent(
-        selectedOption
-      )}`,
-      { method: "POST" }
-    );
-
-    const data = await res.json();
-
-    const questions = Array.isArray(data) ? data : data.questions;
-
-    setLLMResponse(
-      Array.isArray(questions)
-        ? questions.join("\n")
-        : data.error ?? "No response"
-    );
-
-    setLLMCalled(true);
-  };
-
-  if (!mounted) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
-
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <div className="fixed top-4 right-4 z-50">
-        <Suspense fallback={null}>
-          <LanguageSwitcherComponent />
-        </Suspense>
+    <div className="flex flex-col min-h-screen bg-slate-100">
+      <div className="navbar bg-base-100 shadow-sm py-4 min-h-24">
+        <div className="navbar-start">
+          <div className="flex flex-col gap-1">
+            <li className="btn btn-ghost text-3xl h-auto py-2">
+              <Link href="/">
+                <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500">
+                  interview warmup
+                </span>
+              </Link>
+            </li>
+            {/* <p className="text-base text-gray-600 pl-4 mb-4">
+              Preparing for:{" "}
+              <span className="font-semibold text-blue-600">
+                {context?.role || "Loading..."}
+              </span>
+            </p> */}
+          </div>
+        </div>
+
+        <div className="navbar-center"></div>
+
+        <div className="navbar-end">
+          <ul className="menu menu-horizontal px-1">
+            {!llmCalled ? (
+              <div className="text-center py-2">
+                <span className="loading loading-spinner loading-md text-primary"></span>
+                <p className="text-sm text-gray-600 mt-2">Generating questions...</p>
+              </div>
+            ) : (
+              <Link href="/results" className="btn btn-lg rounded-4xl" style={{backgroundColor: '#2563eb', color: 'white', borderColor: '#2563eb'}}>
+                Next to Recommendations
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </Link>
+            )}
+          </ul>
+        </div>
       </div>
 
-      <h1 className="text-xl font-semibold mb-2">{t("call.title")}</h1>
-      <p className="mb-4">{t("call.selectedOption")} {selectedOption}</p>
+      <div className="w-full max-w-6xl mx-auto">
+        <div className="tabs tabs-box tabs-border mt-8">
+          <input
+            type="radio"
+            name="my_tabs_6"
+            className="tab h-12 text-base font-medium text-gray-500 aria-checked:text-indigo-600 aria-checked:border-indigo-600"
+            aria-label="Background"
+            defaultChecked
+          />
+          <div className="tab-content p-6 w-full bg-transparent border-none">
+            {backgroundQuestions.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No background questions yet
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-6">
+                {backgroundQuestions.map((q, idx) => {
+                  const key = `Background-${idx}`;
+                  const hasAnswer = answers[key]?.trim().length > 0;
+                  const hasFeedback = feedback[key];
+                  const isEvaluating = evaluating[key];
 
-      <button className="btn btn-primary" onClick={() => getLLMResponse()}>
-        {t("call.generateQuestions")}
-      </button>
+                  return (
+                    <div
+                      key={idx}
+                      className="bg-linear-to-br from-red-50 to-red-50 rounded-2xl p-6 border border-red-200 shadow-sm"
+                    >
+                      <div className="flex items-start gap-3 mb-4">
+                        <span className="inline-flex items-center justify-center w-10 h-10 bg-red-500 text-white text-base font-bold rounded-full shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1">
+                          <span className="inline-block bg-red-100 text-red-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">
+                            Background
+                          </span>
+                          <p className="text-base text-gray-800 font-medium leading-relaxed">
+                            {q}
+                          </p>
+                        </div>
+                      </div>
 
-      <div className="tabs tabs-box mt-8">
-        <input
-          type="radio"
-          name="my_tabs_6"
-          className="tab"
-          aria-label={t("call.background")}
-          defaultChecked
-        />
-        <div className="tab-content bg-base-100 border-base-300 p-6">
-          {backgroundQuestions.length === 0 ? (
-            <p className="text-sm text-gray-500">{t("call.noBackground")}</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {backgroundQuestions.map((q, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow"
-                >
-                  <span className="inline-block bg-pink-100 text-pink-700 text-xs font-medium px-2 py-1 rounded-full mb-2">
-                    {t("call.background")}
-                  </span>
-                  <p className="text-sm text-gray-700">{q}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Your Answer:
+                        </label>
+                        <div className="relative">
+                          <textarea
+                            className="w-full px-4 py-3 pr-12 rounded-lg border border-red-200 focus:border-red-400 focus:ring-2 focus:ring-red-200 outline-none transition-all resize-none"
+                            rows={4}
+                            placeholder="Type your answer here or use voice input..."
+                            value={answers[key] || ""}
+                            onChange={(e) =>
+                              handleAnswerChange(
+                                "Background",
+                                idx,
+                                e.target.value
+                              )
+                            }
+                            disabled={!!hasFeedback}
+                          />
+                          <button
+                            className={`absolute right-2 bottom-2 p-2 rounded-full transition-all ${
+                              isRecording[key] 
+                                ? 'bg-red-500 text-white animate-pulse' 
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                            onClick={() => handleVoiceInput("Background", idx)}
+                            disabled={!!hasFeedback}
+                            title={isRecording[key] ? "Stop recording" : "Start voice input"}
+                          >
+                            {isRecording[key] ? (
+                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M6 6h12v12H6z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
 
-        <input
-          type="radio"
-          name="my_tabs_6"
-          className="tab"
-          aria-label={t("call.situation")}
-        />
-        <div className="tab-content bg-base-100 border-base-300 p-6">
-          {situationQuestions.length === 0 ? (
-            <p className="text-sm text-gray-500">{t("call.noSituation")}</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {situationQuestions.map((q, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow"
-                >
-                  <span className="inline-block bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded-full mb-2">
-                    {t("call.situation")}
-                  </span>
-                  <p className="text-sm text-gray-700">{q}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                      {!hasFeedback && (
+                        <button
+                          className="mt-3 btn btn-primary btn-sm"
+                          onClick={() =>
+                            handleSubmitAnswer("Background", idx, q)
+                          }
+                          disabled={!hasAnswer || isEvaluating}
+                        >
+                          {isEvaluating ? (
+                            <>
+                              <span className="loading loading-spinner loading-sm"></span>
+                              Evaluating...
+                            </>
+                          ) : (
+                            "Submit Answer"
+                          )}
+                        </button>
+                      )}
 
-        <input
-          type="radio"
-          name="my_tabs_6"
-          className="tab"
-          aria-label={t("call.technical")}
-        />
-        <div className="tab-content bg-base-100 border-base-300 p-6">
-          {technicalQuestions.length === 0 ? (
-            <p className="text-sm text-gray-500">{t("call.noTechnical")}</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {technicalQuestions.map((q, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow"
-                >
-                  <span className="inline-block bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded-full mb-2">
-                    {t("call.technical")}
-                  </span>
-                  <p className="text-sm text-gray-700">{q}</p>
-                </div>
-              ))}
-            </div>
-          )}
+                      {hasFeedback && (
+                        <div className="mt-4 bg-white rounded-lg p-4 border-l-4 border-red-500">
+                          <div className="flex items-center gap-2 mb-2">
+                            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <h4 className="font-semibold text-gray-800">
+                              AI Feedback
+                            </h4>
+                          </div>
+                          <button
+                            className="mt-3 text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
+                            onClick={() => {
+                              setAnswers((prev) => ({ ...prev, [key]: "" }));
+                              setFeedback((prev) => {
+                                const newFeedback = { ...prev };
+                                delete newFeedback[key];
+                                return newFeedback;
+                              });
+                            }}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Try Again
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <input
+            type="radio"
+            name="my_tabs_6"
+            className="tab h-12 text-base font-medium text-gray-500 aria-checked:text-indigo-600 aria-checked:border-indigo-600"
+            aria-label="Situation"
+          />
+          <div className="tab-content p-6 w-full bg-transparent border-none">
+            {situationQuestions.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No situation questions yet
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-6">
+                {situationQuestions.map((q, idx) => {
+                  const key = `Situation-${idx}`;
+                  const hasAnswer = answers[key]?.trim().length > 0;
+                  const hasFeedback = feedback[key];
+                  const isEvaluating = evaluating[key];
+
+                  return (
+                    <div
+                      key={idx}
+                      className="bg-linear-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200 shadow-sm"
+                    >
+                      <div className="flex items-start gap-3 mb-4">
+                        <span className="inline-flex items-center justify-center w-10 h-10 bg-blue-500 text-white text-base font-bold rounded-full shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1">
+                          <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">
+                            Situation
+                          </span>
+                          <p className="text-base text-gray-800 font-medium leading-relaxed">
+                            {q}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Your Answer:
+                        </label>
+                        <div className="relative">
+                          <textarea
+                            className="w-full px-4 py-3 pr-12 rounded-lg border border-blue-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none"
+                            rows={4}
+                            placeholder="Type your answer here or use voice input..."
+                            value={answers[key] || ""}
+                            onChange={(e) =>
+                              handleAnswerChange("Situation", idx, e.target.value)
+                            }
+                            disabled={!!hasFeedback}
+                          />
+                          <button
+                            className={`absolute right-2 bottom-2 p-2 rounded-full transition-all ${
+                              isRecording[key] 
+                                ? 'bg-red-500 text-white animate-pulse' 
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                            onClick={() => handleVoiceInput("Situation", idx)}
+                            disabled={!!hasFeedback}
+                            title={isRecording[key] ? "Stop recording" : "Start voice input"}
+                          >
+                            {isRecording[key] ? (
+                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M6 6h12v12H6z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {!hasFeedback && (
+                        <button
+                          className="mt-3 btn btn-primary btn-sm"
+                          onClick={() =>
+                            handleSubmitAnswer("Situation", idx, q)
+                          }
+                          disabled={!hasAnswer || isEvaluating}
+                        >
+                          {isEvaluating ? (
+                            <>
+                              <span className="loading loading-spinner loading-sm"></span>
+                              Evaluating...
+                            </>
+                          ) : (
+                            "Submit Answer"
+                          )}
+                        </button>
+                      )}
+
+                      {hasFeedback && (
+                        <div className="mt-4 bg-white rounded-lg p-4 border-l-4 border-blue-500">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-2xl">🎯</span>
+                            <h4 className="font-semibold text-gray-800">
+                              AI Evaluation
+                            </h4>
+                            <span className="ml-auto badge badge-lg bg-blue-500 text-white">
+                              Score: {feedback[key].score}/10
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-700 leading-relaxed">
+                            {feedback[key].advice}
+                          </p>
+                          <button
+                            className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                            onClick={() => {
+                              setAnswers((prev) => ({ ...prev, [key]: "" }));
+                              setFeedback((prev) => {
+                                const newFeedback = { ...prev };
+                                delete newFeedback[key];
+                                return newFeedback;
+                              });
+                            }}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Try Again
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <input
+            type="radio"
+            name="my_tabs_6"
+            className="tab h-12 text-base font-medium text-gray-500 aria-checked:text-indigo-600 aria-checked:border-indigo-600"
+            aria-label="Technical"
+          />
+          <div className="tab-content p-6 w-full bg-transparent border-none">
+            {technicalQuestions.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No technical questions yet
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-6">
+                {technicalQuestions.map((q, idx) => {
+                  const key = `Technical-${idx}`;
+                  const hasAnswer = answers[key]?.trim().length > 0;
+                  const hasFeedback = feedback[key];
+                  const isEvaluating = evaluating[key];
+
+                  return (
+                    <div
+                      key={idx}
+                      className="bg-linear-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200 shadow-sm"
+                    >
+                      <div className="flex items-start gap-3 mb-4">
+                        <span className="inline-flex items-center justify-center w-10 h-10 bg-green-500 text-white text-base font-bold rounded-full shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1">
+                          <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">
+                            Technical
+                          </span>
+                          <p className="text-base text-gray-800 font-medium leading-relaxed">
+                            {q}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Your Answer:
+                        </label>
+                        <div className="relative">
+                          <textarea
+                            className="w-full px-4 py-3 pr-12 rounded-lg border border-green-200 focus:border-green-400 focus:ring-2 focus:ring-green-200 outline-none transition-all resize-none"
+                            rows={4}
+                            placeholder="Type your answer here or use voice input..."
+                            value={answers[key] || ""}
+                            onChange={(e) =>
+                              handleAnswerChange("Technical", idx, e.target.value)
+                            }
+                            disabled={!!hasFeedback}
+                          />
+                          <button
+                            className={`absolute right-2 bottom-2 p-2 rounded-full transition-all ${
+                              isRecording[key] 
+                                ? 'bg-red-500 text-white animate-pulse' 
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                            onClick={() => handleVoiceInput("Technical", idx)}
+                            disabled={!!hasFeedback}
+                            title={isRecording[key] ? "Stop recording" : "Start voice input"}
+                          >
+                            {isRecording[key] ? (
+                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M6 6h12v12H6z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {!hasFeedback && (
+                        <button
+                          className="mt-3 btn btn-primary btn-sm"
+                          onClick={() =>
+                            handleSubmitAnswer("Technical", idx, q)
+                          }
+                          disabled={!hasAnswer || isEvaluating}
+                        >
+                          {isEvaluating ? (
+                            <>
+                              <span className="loading loading-spinner loading-sm"></span>
+                              Evaluating...
+                            </>
+                          ) : (
+                            "Submit Answer"
+                          )}
+                        </button>
+                      )}
+
+                      {hasFeedback && (
+                        <div className="mt-4 bg-white rounded-lg p-4 border-l-4 border-green-500">
+                          <div className="flex items-center gap-2 mb-2">
+                            <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <h4 className="font-semibold text-gray-800">
+                              AI Feedback
+                            </h4>
+                          </div>
+                          <p className="text-sm text-gray-700 leading-relaxed">
+                            {feedback[key].advice}
+                          </p>
+                          <button
+                            className="mt-3 text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                            onClick={() => {
+                              setAnswers((prev) => ({ ...prev, [key]: "" }));
+                              setFeedback((prev) => {
+                                const newFeedback = { ...prev };
+                                delete newFeedback[key];
+                                return newFeedback;
+                              });
+                            }}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Try Again
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default function CallPage() {
-  return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-      <CallPageContent />
-    </Suspense>
-  );
-}
+export default CallPage;
