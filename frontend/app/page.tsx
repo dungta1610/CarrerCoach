@@ -30,7 +30,7 @@ export default function HomePage() {
         <div className="navbar-start" />
 
         <div className="navbar-center">
-          <a className="text-2xl font-bold text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500">
+          <a className="text-2xl font-bold text-transparent bg-clip-text bg-linear-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90%">
             Career Coach
           </a>
         </div>
@@ -46,7 +46,10 @@ export default function HomePage() {
           </span>
         </h1>
         <h2 className="w-full text-center text-gray-600 font-semibold text-2xl mt-8">
-          Discover your career path with AI-powered guidance
+          A quick way to prepare for your next interview in{" "}
+          <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-600 to-cyan-600 transition-all duration-500">
+            {currentField}
+          </span>
         </h2>
         <p className="w-full text-center text-gray-500 text-lg mt-4 max-w-2xl px-4">
           Upload your CV, get personalized feedback, and find jobs that match
@@ -58,14 +61,14 @@ export default function HomePage() {
           </button>
         </a>
 
-        <div className="mt-12 flex gap-6">
+        {/* <div className="mt-12 flex gap-6">
           <a
             href="/InterviewWarmup/start"
             className="text-gray-600 hover:text-indigo-600 transition-colors"
           >
             Or try Interview Warmup →
           </a>
-        </div>
+        </div> */}
       </div>
     </div>
   );

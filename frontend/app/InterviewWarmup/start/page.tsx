@@ -34,13 +34,16 @@ export default function Start() {
   const handleStart = () => {
     const field = customField || analysis?.extracted_role || "General";
     const skills = analysis?.selectedSkills || analysis?.skills || [];
-    
-    localStorage.setItem("interviewContext", JSON.stringify({
-      field,
-      role: analysis?.extracted_role || field,
-      skills,
-    }));
-    
+
+    localStorage.setItem(
+      "interviewContext",
+      JSON.stringify({
+        field,
+        role: analysis?.extracted_role || field,
+        skills,
+      })
+    );
+
     setIsGeneratingQuestions(true);
   };
 
@@ -63,16 +66,20 @@ export default function Start() {
           {analysis ? (
             <div className="space-y-6">
               <div className="bg-blue-50 p-6 rounded-xl border border-blue-200">
-                <div className="badge badge-primary badge-lg mb-3">Your Profile</div>
+                <div className="badge badge-primary badge-lg mb-3">
+                  Your Profile
+                </div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-2">
                   {analysis.extracted_role}
                 </h3>
                 <div className="flex flex-wrap gap-2 mt-4">
-                  {(analysis.selectedSkills || analysis.skills).slice(0, 5).map((skill, idx) => (
-                    <span key={idx} className="badge badge-outline">
-                      {skill}
-                    </span>
-                  ))}
+                  {(analysis.selectedSkills || analysis.skills)
+                    .slice(0, 5)
+                    .map((skill, idx) => (
+                      <span key={idx} className="badge badge-outline">
+                        {skill}
+                      </span>
+                    ))}
                 </div>
               </div>
 
@@ -92,13 +99,14 @@ export default function Start() {
               {isGeneratingQuestions ? (
                 <div className="text-center py-8">
                   <span className="loading loading-spinner loading-lg text-primary"></span>
-                  <p className="text-lg text-gray-600 mt-4">Generating interview questions...</p>
+                  <p className="text-lg text-gray-600 mt-4">
+                    Generating interview questions...
+                  </p>
                 </div>
               ) : (
                 <button
                   onClick={handleStart}
-                  className="btn btn-lg btn-block" 
-                  style={{backgroundColor: '#9333ea', color: 'white', borderColor: '#9333ea'}}
+                  className="btn btn-lg btn-block rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 bg-linear-to-r from-purple-600 to-indigo-600 border-0 text-white font-semibold"
                 >
                   Start Interview Practice
                 </button>
@@ -106,14 +114,25 @@ export default function Start() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <svg className="w-24 h-24 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <svg
+                className="w-24 h-24 mx-auto mb-4 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
               </svg>
               <h2 className="text-2xl font-bold text-gray-700 mb-2">
                 No Profile Found
               </h2>
               <p className="text-gray-600 mb-6">
-                Please complete Phase 1 (Career Dreamer) first to get personalized interview questions.
+                Please complete Phase 1 (Career Dreamer) first to get
+                personalized interview questions.
               </p>
               <div className="space-y-4">
                 <Link
@@ -137,7 +156,9 @@ export default function Start() {
                   {isGeneratingQuestions ? (
                     <div className="text-center py-4">
                       <span className="loading loading-spinner loading-md text-primary"></span>
-                      <p className="text-sm text-gray-600 mt-2">Generating questions...</p>
+                      <p className="text-sm text-gray-600 mt-2">
+                        Generating questions...
+                      </p>
                     </div>
                   ) : (
                     <button

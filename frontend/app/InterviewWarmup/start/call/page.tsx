@@ -17,10 +17,14 @@ const CallPage: React.FC = () => {
   const [backgroundQuestions, setBackgroundQuestions] = useState<string[]>([]);
   const [situationQuestions, setsituationQuestions] = useState<string[]>([]);
   const [technicalQuestions, settechnicalQuestions] = useState<string[]>([]);
-  
+
   // Speech-to-text state
-  const [isRecording, setIsRecording] = useState<{ [key: string]: boolean }>({});
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [isRecording, setIsRecording] = useState<{ [key: string]: boolean }>(
+    {}
+  );
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(
+    null
+  );
 
   useEffect(() => {
     const data = localStorage.getItem("interviewContext");
@@ -111,7 +115,7 @@ const CallPage: React.FC = () => {
 
   const handleVoiceInput = async (category: string, index: number) => {
     const key = `${category}-${index}`;
-    
+
     if (isRecording[key]) {
       // Stop recording
       if (mediaRecorder) {
@@ -132,9 +136,9 @@ const CallPage: React.FC = () => {
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
         const formData = new FormData();
-        formData.append('audio', audioBlob, 'audio.webm');
+        formData.append("audio", audioBlob, "audio.webm");
 
         try {
           const res = await fetch("http://localhost:8000/api/process-voice", {
@@ -156,7 +160,7 @@ const CallPage: React.FC = () => {
           alert("Failed to transcribe audio. Please try again.");
         }
 
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       };
 
       recorder.start();
@@ -243,13 +247,25 @@ const CallPage: React.FC = () => {
       <div className="navbar bg-base-100 shadow-sm py-4 min-h-24">
         <div className="navbar-start">
           <div className="flex flex-col gap-1">
-            <li className="btn btn-ghost text-3xl h-auto py-2">
-              <Link href="/">
-                <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500">
-                  interview warmup
-                </span>
-              </Link>
-            </li>
+            <Link
+              href="/"
+              className="btn btn-ghost text-sm h-auto py-2 text-black hover:text-black"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                />
+              </svg>
+              Back to home page
+            </Link>
             {/* <p className="text-base text-gray-600 pl-4 mb-4">
               Preparing for:{" "}
               <span className="font-semibold text-blue-600">
@@ -259,24 +275,62 @@ const CallPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="navbar-center"></div>
+        <div className="navbar-center">
+          {!llmCalled ? (
+            <div className="text-center py-2">
+              <span className="loading loading-spinner loading-md text-primary"></span>
+              <p className="text-xl text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 mt-4">
+                ✨ Generating insights...
+              </p>
+            </div>
+          ) : (
+            <Link
+              href="/results"
+              className="btn btn-lg rounded-4xl"
+              style={{
+                backgroundColor: "#2563eb",
+                color: "white",
+                borderColor: "#2563eb",
+              }}
+            >
+              Next to Recommendations
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M14 5l7 7m0 0l-7 7m7-7H3"
+                />
+              </svg>
+            </Link>
+          )}
+        </div>
 
         <div className="navbar-end">
-          <ul className="menu menu-horizontal px-1">
-            {!llmCalled ? (
-              <div className="text-center py-2">
-                <span className="loading loading-spinner loading-md text-primary"></span>
-                <p className="text-sm text-gray-600 mt-2">Generating questions...</p>
-              </div>
-            ) : (
-              <Link href="/results" className="btn btn-lg rounded-4xl" style={{backgroundColor: '#2563eb', color: 'white', borderColor: '#2563eb'}}>
-                Next to Recommendations
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </Link>
-            )}
-          </ul>
+          <Link
+            href="/InterviewWarmup/start/call/livedemo"
+            className="btn btn-outline btn-lg rounded-full hover:bg-red-600 hover:text-white hover:border-red-600"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+            Live Demo
+          </Link>
         </div>
       </div>
 
@@ -342,21 +396,39 @@ const CallPage: React.FC = () => {
                           />
                           <button
                             className={`absolute right-2 bottom-2 p-2 rounded-full transition-all ${
-                              isRecording[key] 
-                                ? 'bg-red-500 text-white animate-pulse' 
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              isRecording[key]
+                                ? "bg-red-500 text-white animate-pulse"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                             }`}
                             onClick={() => handleVoiceInput("Background", idx)}
                             disabled={!!hasFeedback}
-                            title={isRecording[key] ? "Stop recording" : "Start voice input"}
+                            title={
+                              isRecording[key]
+                                ? "Stop recording"
+                                : "Start voice input"
+                            }
                           >
                             {isRecording[key] ? (
-                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                              <svg
+                                className="w-5 h-5"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                              >
                                 <path d="M6 6h12v12H6z" />
                               </svg>
                             ) : (
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                                />
                               </svg>
                             )}
                           </button>
@@ -385,8 +457,18 @@ const CallPage: React.FC = () => {
                       {hasFeedback && (
                         <div className="mt-4 bg-white rounded-lg p-4 border-l-4 border-red-500">
                           <div className="flex items-center gap-2 mb-2">
-                            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg
+                              className="w-6 h-6 text-red-500"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
                             </svg>
                             <h4 className="font-semibold text-gray-800">
                               AI Feedback
@@ -403,8 +485,18 @@ const CallPage: React.FC = () => {
                               });
                             }}
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                              />
                             </svg>
                             Try Again
                           </button>
@@ -466,27 +558,49 @@ const CallPage: React.FC = () => {
                             placeholder="Type your answer here or use voice input..."
                             value={answers[key] || ""}
                             onChange={(e) =>
-                              handleAnswerChange("Situation", idx, e.target.value)
+                              handleAnswerChange(
+                                "Situation",
+                                idx,
+                                e.target.value
+                              )
                             }
                             disabled={!!hasFeedback}
                           />
                           <button
                             className={`absolute right-2 bottom-2 p-2 rounded-full transition-all ${
-                              isRecording[key] 
-                                ? 'bg-red-500 text-white animate-pulse' 
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              isRecording[key]
+                                ? "bg-red-500 text-white animate-pulse"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                             }`}
                             onClick={() => handleVoiceInput("Situation", idx)}
                             disabled={!!hasFeedback}
-                            title={isRecording[key] ? "Stop recording" : "Start voice input"}
+                            title={
+                              isRecording[key]
+                                ? "Stop recording"
+                                : "Start voice input"
+                            }
                           >
                             {isRecording[key] ? (
-                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                              <svg
+                                className="w-5 h-5"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                              >
                                 <path d="M6 6h12v12H6z" />
                               </svg>
                             ) : (
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                                />
                               </svg>
                             )}
                           </button>
@@ -537,8 +651,18 @@ const CallPage: React.FC = () => {
                               });
                             }}
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                              />
                             </svg>
                             Try Again
                           </button>
@@ -600,27 +724,49 @@ const CallPage: React.FC = () => {
                             placeholder="Type your answer here or use voice input..."
                             value={answers[key] || ""}
                             onChange={(e) =>
-                              handleAnswerChange("Technical", idx, e.target.value)
+                              handleAnswerChange(
+                                "Technical",
+                                idx,
+                                e.target.value
+                              )
                             }
                             disabled={!!hasFeedback}
                           />
                           <button
                             className={`absolute right-2 bottom-2 p-2 rounded-full transition-all ${
-                              isRecording[key] 
-                                ? 'bg-red-500 text-white animate-pulse' 
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              isRecording[key]
+                                ? "bg-red-500 text-white animate-pulse"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                             }`}
                             onClick={() => handleVoiceInput("Technical", idx)}
                             disabled={!!hasFeedback}
-                            title={isRecording[key] ? "Stop recording" : "Start voice input"}
+                            title={
+                              isRecording[key]
+                                ? "Stop recording"
+                                : "Start voice input"
+                            }
                           >
                             {isRecording[key] ? (
-                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                              <svg
+                                className="w-5 h-5"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                              >
                                 <path d="M6 6h12v12H6z" />
                               </svg>
                             ) : (
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                                />
                               </svg>
                             )}
                           </button>
@@ -649,8 +795,18 @@ const CallPage: React.FC = () => {
                       {hasFeedback && (
                         <div className="mt-4 bg-white rounded-lg p-4 border-l-4 border-green-500">
                           <div className="flex items-center gap-2 mb-2">
-                            <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg
+                              className="w-6 h-6 text-green-500"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
                             </svg>
                             <h4 className="font-semibold text-gray-800">
                               AI Feedback
@@ -670,8 +826,18 @@ const CallPage: React.FC = () => {
                               });
                             }}
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                              />
                             </svg>
                             Try Again
                           </button>
