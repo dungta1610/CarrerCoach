@@ -1,0 +1,255 @@
+# api/ai_endpoints.py
+
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+import json
+import re
+# Import từ file config/models mới
+from core.models import UserInput, CVAnalysisRequest, CVGenerationRequest, QuestionGenerationRequest
+from core.config import GEMINI_MODEL # Import model đã được cấu hình
+
+router = APIRouter()
+
+async def get_gemini_evaluation(user_answer: str):
+    """
+    Contains the logic to call Gemini.
+    Receives text (typed or from STT) and returns JSON.
+    """
+    prompt_template = f"""You are an expert interview coach named CareerCoach.
+Analyze the user's input and return ONLY a valid JSON object (no markdown, no extra text).
+
+If the input is clearly an interview answer:
+Return this exact format:
+{{
+  "type": "evaluation",
+  "feedback": "Detailed feedback on strengths and weaknesses, with specific suggestions for improvement.",
+  "suggested_answer": "A better example answer to this question."
+}}
+
+Otherwise:
+Return this format:
+{{
+  "type": "general_answer",
+  "response": "Your response to the user's input."
+}}
+
+User input:
+{user_answer}
+
+Respond with ONLY the JSON object, no other text."""
+    
+    try:
+        response = await GEMINI_MODEL.generate_content_async(prompt_template)
+        raw_text = response.text.strip()
+        
+        print(f"Raw Gemini response: {raw_text[:200]}...")
+        
+        # Cleanup Markdown and code blocks
+        raw_text = re.sub(r'```json\s*', '', raw_text)
+        raw_text = re.sub(r'```\s*', '', raw_text)
+        raw_text = raw_text.strip()
+        
+        # Try to find JSON object
+        match = re.search(r'(\{[\s\S]*\})', raw_text)
+        if match:
+            json_str = match.group(1)
+            print(f"Extracted JSON: {json_str[:200]}...")
+            
+            # Fix trailing commas before closing brackets
+            json_str = re.sub(r',\s*([\]\}])', r'\1', json_str)
+            
+            # Try to parse JSON
+            ai_data = json.loads(json_str)
+            print(f"Successfully parsed: {ai_data.get('type')}")
+            return JSONResponse(content=ai_data)
+        else:
+            print(f"No JSON found in response")
+            return JSONResponse(
+                content={
+                    "type": "general_answer",
+                    "response": raw_text[:500] if raw_text else "Please provide a clearer input."
+                }
+            )
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error: {e}")
+        return JSONResponse(
+            content={
+                "type": "evaluation",
+                "feedback": "Your answer shows good effort. Keep practicing and try to be more specific with examples.",
+                "suggested_answer": "Provide a more structured answer with specific examples from your experience."
+            }
+        )
+    except Exception as e:
+        print(f"Error calling Gemini: {type(e).__name__}: {e}")
+        return JSONResponse(
+            content={
+                "type": "evaluation",
+                "feedback": "I'm processing your response. Please try again in a moment.",
+                "suggested_answer": "Consider adding more specific details to your answer."
+            }
+        )
+
+@router.post("/gemini")
+async def handle_gemini_request(data: UserInput):
+    return await get_gemini_evaluation(data.prompt)
+
+@router.post("/analyze-cv")
+async def analyze_cv(data: CVAnalysisRequest):
+    """
+    Analyze CV text and extract: role, skills, experience, pros/cons, learning path
+    """
+    prompt_template = f"""
+    Bạn là chuyên gia hướng dẫn nghề nghiệp và phân tích sơ yếu lý lịch.
+ 
+    Phân tích văn bản sơ yếu lý lịch sau và trích xuất các thông tin chi tiết toàn diện:
+ 
+    Văn bản CV:
+    {data.cv_text}
+ 
+    VAI TRÒ MỤC TIÊU (nếu có): {data.role or 'Không xác định'}
+    TỔ CHỨC MỤC TIÊU (nếu có): {data.organization or 'Không xác định'}
+ 
+    Cung cấp phân tích chi tiết theo định dạng JSON với cấu trúc sau:
+    {{
+      "extracted_role": "Vai trò/vị trí chính dựa trên CV (ví dụ: 'Kỹ sư phần mềm', 'Quản lý tiếp thị')",
+      "skills": ["kỹ năng1", "kỹ năng2", "kỹ năng3", ...],
+      "experience_years": "Số năm kinh nghiệm ước tính",
+      "experience_summary": "Tóm tắt ngắn gọn về kinh nghiệm làm việc",
+      "education": "Nền tảng giáo dục",
+      "strengths": ["điểm mạnh1", "điểm mạnh2", ...],
+      "weaknesses": ["điểm yếu1", "điểm yếu2", ...],
+      "learning_path": {{
+        "immediate": ["kỹ năng hoặc lĩnh vực cần học ngay lập tức"],
+        "short_term": ["kỹ năng cho 3-6 tháng tới"],
+        "long_term": ["kỹ năng cho 6-12 tháng"]
+      }},
+      "recommended_tasks": ["nhiệm vụ 1", "nhiệm vụ 2", ...]
+    }}
+ 
+    Chỉ trả về đối tượng JSON, không có văn bản bổ sung.
+    """
+    
+    try:
+        response = await GEMINI_MODEL.generate_content_async(prompt_template)
+        raw_text = response.text.strip()
+ 
+        match = re.search(r'```json\s*({.*?})\s*```|({.*?})', raw_text, re.DOTALL)
+        if match:
+            json_str = match.group(1) or match.group(2)
+            analysis_data = json.loads(json_str)
+            return JSONResponse(content=analysis_data)
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Could not parse AI response", "raw": raw_text}
+            )
+    except Exception as e:
+        print(f"Error in CV analysis: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@router.post("/generate-cv")
+async def generate_cv(data: CVGenerationRequest):
+    """
+    Generate a sample CV in markdown format based on user profile
+    """
+    skills_list = ", ".join(data.skills)
+    achievements_list = "\n".join([f"- {a}" for a in data.achievements]) if data.achievements else "- [Add your achievements]"
+    
+    prompt_template = f"""
+    You are an expert CV/resume writer.
+    
+    Create a professional CV in Markdown format for a candidate with the following profile using English:
+    
+    ROLE: {data.role}
+    SKILLS: {skills_list}
+    EXPERIENCE: {data.experience}
+    EDUCATION: {data.education}
+    ACHIEVEMENTS:
+    {achievements_list}
+    
+    Generate a complete, professional CV in Markdown format with the following sections:
+    - Header with name and contact (use placeholders)
+    - Professional Summary
+    - Skills
+    - Work Experience
+    - Education
+    - Achievements
+    - Additional relevant sections
+    
+    Make it ATS-friendly and professional. Use proper Markdown formatting.
+    Return ONLY the Markdown content, no JSON, no code blocks.
+    """
+    
+    try:
+        response = await GEMINI_MODEL.generate_content_async(prompt_template)
+        cv_markdown = response.text.strip()
+        
+        # Remove markdown code blocks if present
+        cv_markdown = re.sub(r'^```markdown\s*', '', cv_markdown)
+        cv_markdown = re.sub(r'```\s*$', '', cv_markdown)
+        
+        return JSONResponse(content={"cv_markdown": cv_markdown})
+    except Exception as e:
+        print(f"Error in CV generation: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@router.post("/generate-questions")
+async def generate_questions(data: QuestionGenerationRequest):
+    skills_text = ", ".join(data.skills) if data.skills else "kỹ năng chuyên môn chung"
+    role_text = data.role or data.field
+    
+    prompt_template = f"""Bạn là chuyên gia tuyển dụng nhân sự cấp cao. Hãy tạo các câu hỏi phỏng vấn cho hồ sơ sau:
+ 
+TARGET ROLE: {role_text}
+FIELD: {data.field}
+KEY SKILLS: {skills_text}
+ 
+CHỈ trả về một mảng JSON hợp lệ gồm 15-20 chuỗi (không có markdown, không có văn bản bên ngoài dấu ngoặc).
+Mỗi câu hỏi PHẢI bắt đầu chính xác với một thẻ: [Background], [Situation], hoặc [Technical].
+ 
+Định dạng ví dụ:
+[
+  "[Bối cảnh] Hãy kể cho tôi nghe về kinh nghiệm của bạn với việc phân tích dữ liệu.",
+  "[Tình huống] Mô tả cách bạn xử lý một hạn chót khó khăn.",
+  "[Kỹ thuật] Giải thích các khái niệm chính của học máy."
+]
+ 
+Đặt câu hỏi cụ thể cho vai trò và kỹ năng. CHỈ trả về mảng JSON, không trả về bất kỳ dữ liệu nào khác."""
+    
+    try:
+        response = await GEMINI_MODEL.generate_content_async(prompt_template)
+        raw_text = response.text.strip()
+ 
+        # Remove markdown code blocks
+        raw_text = re.sub(r'```json\s*', '', raw_text)
+        raw_text = re.sub(r'```\s*', '', raw_text)
+ 
+        # Find JSON array
+        match = re.search(r'(\[.*\])', raw_text, re.DOTALL)
+        if match:
+            json_str = match.group(1)
+            # Clean up common JSON issues
+            json_str = re.sub(r',\s*([\]\}])', r'\1', json_str)  # Remove trailing commas
+            json_str = json_str.replace("\n", " ").replace("\r", " ")  # Remove newlines
+ 
+            questions = json.loads(json_str)
+ 
+            if not isinstance(questions, list):
+                raise ValueError("Phản hồi không phải là một danh sách")
+ 
+            return JSONResponse(content={"questions": questions})
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Không thể tìm thấy mảng JSON từ AI.", "raw": raw_text[:500]}
+            )
+    except json.JSONDecodeError as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Lỗi phân tích JSON: {str(e)}", "raw": raw_text[:500]}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Lỗi khi tạo câu hỏi: {str(e)}"}
+        )
