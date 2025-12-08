@@ -288,7 +288,7 @@ export default function Start() {
 
           <button
             onClick={() => setStep("tasks")}
-            className="btn btn-primary btn-lg rounded-full px-12 w-full"
+            className="btn btn-lg px-20 py-6 rounded-full w-full text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all text-white border-none bg-gradient-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90%"
             disabled={selectedSkills.length === 0}
           >
             Continue to Tasks
@@ -332,7 +332,7 @@ export default function Start() {
             </button>
             <button
               onClick={handleContinueToResult}
-              className="btn btn-primary btn-lg rounded-full flex-1"
+              className="btn btn-lg px-20 py-6 rounded-full text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all text-white border-none bg-gradient-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90%"
             >
               View Analysis Results
             </button>

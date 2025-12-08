@@ -21,14 +21,12 @@ export default function LiveDemoPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Load questions from localStorage
     const storedQuestions = localStorage.getItem("interviewQuestions");
     if (storedQuestions) {
       try {
         const parsed = JSON.parse(storedQuestions);
         const allQuestions: Question[] = [];
         
-        // Parse questions and extract 5 random ones
         parsed.forEach((q: string, idx: number) => {
           const match = q.match(/^\[(Background|Situation|Technical)\]\s*(.+)$/);
           if (match) {
@@ -40,7 +38,6 @@ export default function LiveDemoPage() {
           }
         });
         
-        // Select 5 random questions (mix of categories)
         const randomQuestions: Question[] = [];
         const categories = ["Background", "Situation", "Technical"];
         
@@ -52,7 +49,6 @@ export default function LiveDemoPage() {
           }
         });
         
-        // Add 2 more random questions
         const remaining = allQuestions.filter(q => !randomQuestions.includes(q));
         for (let i = 0; i < Math.min(2, remaining.length); i++) {
           const randomIdx = Math.floor(Math.random() * remaining.length);
@@ -67,15 +63,61 @@ export default function LiveDemoPage() {
     setIsLoading(false);
   }, []);
 
-  const speakQuestion = (text: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      utterance.pitch = 1;
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(utterance);
+  useEffect(() => {
+    if (questions.length > 0 && currentQuestion) {
+      setTimeout(() => speakQuestion(currentQuestion.text), 500);
+    }
+  }, [currentQuestionIndex, questions]);
+
+  const speakQuestion = async (text: string) => {
+    setIsSpeaking(true);
+    
+    try {
+      const res = await fetch("http://localhost:8000/api/text-to-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to synthesize speech");
+      }
+
+      const data = await res.json();
+      const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
+      
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = () => setIsSpeaking(false);
+      
+      await audio.play();
+    } catch (error) {
+      console.error("Error with Google Cloud TTS, falling back to browser TTS:", error);
+      
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.85;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoice = voices.find(voice => 
+          voice.lang.startsWith('en') && 
+          (voice.name.includes('Google') || voice.name.includes('Enhanced') || voice.name.includes('Premium'))
+        ) || voices.find(voice => voice.lang.startsWith('en-US'));
+        
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+        
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
+        
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setIsSpeaking(false);
+      }
     }
   };
 
@@ -136,14 +178,27 @@ export default function LiveDemoPage() {
 
     setIsEvaluating(true);
     try {
+      const questionContext = `Question: ${currentQuestion.text}\n\nMy Answer: ${answer}`;
+      
       const res = await fetch("http://localhost:8000/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: answer }),
+        body: JSON.stringify({ prompt: questionContext }),
       });
 
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
       const data = await res.json();
-      setFeedback(data.feedback || data.response || "No feedback available");
+      
+      if (data.type === "evaluation" && data.feedback) {
+        setFeedback(`${data.feedback}\n\nSuggested Answer: ${data.suggested_answer || "N/A"}`);
+      } else if (data.type === "general_answer" && data.response) {
+        setFeedback(data.response);
+      } else {
+        setFeedback(data.feedback || data.response || "No feedback available");
+      }
     } catch (error) {
       console.error("Error evaluating answer:", error);
       setFeedback("Failed to evaluate answer. Please try again.");
@@ -192,7 +247,7 @@ export default function LiveDemoPage() {
 
         <div className="navbar-center">
           <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">
-            Live Interview Demo
+            Live Demo
           </h1>
         </div>
 
@@ -231,12 +286,18 @@ export default function LiveDemoPage() {
                 <button
                   onClick={() => currentQuestion && speakQuestion(currentQuestion.text)}
                   disabled={isSpeaking}
-                  className="btn btn-sm btn-circle btn-ghost"
-                  title="Read question aloud"
+                  className={`btn btn-sm btn-circle ${isSpeaking ? 'btn-primary animate-pulse' : 'btn-ghost'}`}
+                  title={isSpeaking ? "Speaking..." : "Read question aloud"}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.536a5 5 0 001.414 1.414m0-7.072a5 5 0 00-1.414 1.414M12 12v.01" />
-                  </svg>
+                  {isSpeaking ? (
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                    </svg>
+                  )}
                 </button>
               </div>
               <p className="text-xl font-medium text-gray-800 leading-relaxed">
@@ -250,16 +311,19 @@ export default function LiveDemoPage() {
                 <label className="text-sm font-semibold text-gray-700">Your Answer:</label>
                 <button
                   onClick={isRecording ? stopRecording : startRecording}
-                  className={`btn btn-sm ${isRecording ? 'btn-error' : 'btn-primary'} btn-circle`}
+                  className={`btn btn-sm ${isRecording ? 'btn-error animate-pulse' : 'btn-primary'} btn-circle`}
                   title={isRecording ? "Stop recording" : "Start voice input"}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {isRecording ? (
-                      <rect x="6" y="6" width="12" height="12" rx="1" />
-                    ) : (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    )}
-                  </svg>
+                  {isRecording ? (
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                  )}
                 </button>
               </div>
               <textarea

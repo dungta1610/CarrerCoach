@@ -76,32 +76,57 @@ const CallPage: React.FC = () => {
     setEvaluating((prev) => ({ ...prev, [key]: true }));
 
     try {
-      // Call backend API to evaluate the answer
+      const questionContext = `Interview Question: ${question}\n\nMy Answer: ${answer}\n\nPlease evaluate my answer to this interview question.`;
+      
+      console.log(`Sending feedback request for ${key}...`);
+      
       const res = await fetch("http://localhost:8000/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: answer }),
+        body: JSON.stringify({ prompt: questionContext }),
       });
 
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
       const data = await res.json();
+      console.log(`Feedback response for ${key}:`, data);
 
       // Extract feedback from the response
-      if (data.type === "evaluation") {
-        setFeedback((prev) => ({
-          ...prev,
-          [key]: {
-            advice: data.feedback || "No feedback provided",
-            suggested_answer: data.suggested_answer,
-          },
-        }));
+      if (data.type === "evaluation" && data.feedback) {
+        console.log(`Setting evaluation feedback for ${key}`);
+        setFeedback((prev) => {
+          const updated = {
+            ...prev,
+            [key]: {
+              advice: data.feedback || "No feedback provided",
+              suggested_answer: data.suggested_answer,
+            },
+          };
+          console.log(`Feedback state updated:`, updated);
+          return updated;
+        });
+      } else if (data.response) {
+        console.log(`Setting general answer for ${key}`);
+        setFeedback((prev) => {
+          const updated = {
+            ...prev,
+            [key]: {
+              advice:
+                data.response ||
+                "Please provide a more detailed answer to the interview question.",
+            },
+          };
+          console.log(`Feedback state updated:`, updated);
+          return updated;
+        });
       } else {
-        // If AI didn't recognize it as an interview answer
+        console.warn(`Unexpected response format for ${key}:`, data);
         setFeedback((prev) => ({
           ...prev,
           [key]: {
-            advice:
-              data.response ||
-              "Please provide a more detailed answer to the interview question.",
+            advice: "Unable to evaluate. Please try again.",
           },
         }));
       }
@@ -126,17 +151,36 @@ const CallPage: React.FC = () => {
     }
 
     try {
-      // Start recording
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      // Start recording with optimized settings
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 48000
+        }
+      });
+      
+      const options: MediaRecorderOptions = { mimeType: 'audio/webm;codecs=opus' };
+      const recorder = new MediaRecorder(stream, options);
       const audioChunks: Blob[] = [];
 
       recorder.ondataavailable = (event) => {
-        audioChunks.push(event.data);
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+        const audioBlob = new Blob(audioChunks, { type: "audio/webm;codecs=opus" });
+        
+        console.log(`Audio recorded: ${audioBlob.size} bytes`);
+        
+        if (audioBlob.size < 1000) {
+          alert("Recording too short. Please speak for at least 1 second.");
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        
         const formData = new FormData();
         formData.append("audio", audioBlob, "audio.webm");
 
@@ -146,18 +190,25 @@ const CallPage: React.FC = () => {
             body: formData,
           });
 
+          if (!res.ok) {
+            const errorData = await res.json();
+            console.error("Transcription error:", errorData);
+            alert(`Failed to transcribe audio: ${errorData.error || 'Unknown error'}`);
+            return;
+          }
+
           const data = await res.json();
-          if (data.transcription) {
+          if (data.transcription && data.transcription.trim()) {
             setAnswers((prev) => ({
               ...prev,
               [key]: (prev[key] || "") + " " + data.transcription,
             }));
           } else {
-            alert("Failed to transcribe audio. Please try again.");
+            alert("No speech detected. Please try speaking more clearly.");
           }
         } catch (error) {
           console.error("Error transcribing audio:", error);
-          alert("Failed to transcribe audio. Please try again.");
+          alert("Failed to transcribe audio. Please check your internet connection and try again.");
         }
 
         stream.getTracks().forEach((track) => track.stop());
@@ -459,7 +510,7 @@ const CallPage: React.FC = () => {
 
                       {hasFeedback && (
                         <div className="mt-4 bg-white rounded-lg p-4 border-l-4 border-red-500">
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-2 mb-3">
                             <svg
                               className="w-6 h-6 text-red-500"
                               fill="none"
@@ -477,6 +528,17 @@ const CallPage: React.FC = () => {
                               AI Feedback
                             </h4>
                           </div>
+                          <p className="text-sm text-gray-700 leading-relaxed mb-3">
+                            {feedback[key].advice}
+                          </p>
+                          {feedback[key].suggested_answer && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <p className="text-xs font-semibold text-gray-600 mb-2">Suggested Answer:</p>
+                              <p className="text-sm text-gray-600 leading-relaxed italic">
+                                {feedback[key].suggested_answer}
+                              </p>
+                            </div>
+                          )}
                           <button
                             className="mt-3 text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
                             onClick={() => {

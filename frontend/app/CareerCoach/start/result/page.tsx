@@ -35,7 +35,7 @@ export default function ResultPage() {
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-5xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90% mb-2">
+          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-linear-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90% ">
             Career Analysis
           </h1>
           <p className="text-gray-600">

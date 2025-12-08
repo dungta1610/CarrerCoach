@@ -2,51 +2,50 @@ import google.generativeai as genai
 from fastapi import FastAPI, File, UploadFile
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from google.cloud import speech
 from google.cloud import vision
+from google.cloud import texttospeech
 import json
 import re  
 from fastapi.concurrency import run_in_threadpool 
 from fastapi.middleware.cors import CORSMiddleware
+import base64
 
-# Read API keys directly from key folder
+# Key file paths
 GOOGLE_SPEECH_KEY_FILE = "key/speech_key.json"
 VISION_KEY = "key/ocr_key.json"
 CHATBOT_KEY_FILE = "key/chatbot_key.json"
 
-# Load Gemini API key from JSON file
 def load_gemini_api_key(key_file: str) -> str:
     """Load Gemini API key from JSON file."""
     try:
         with open(key_file, 'r') as f:
             key_data = json.load(f)
-            # Assuming the key is stored under 'api_key' or similar field
-            # Adjust based on your actual JSON structure
+            # Check for common key names in the JSON structure
             if isinstance(key_data, dict):
-                # Try common key names
                 for key_name in ['GOOGLE_API_KEY', 'api_key', 'key', 'apiKey', 'API_KEY']:
                     if key_name in key_data:
                         return key_data[key_name]
-                # If dict doesn't have expected key, return first value
+                # Fallback: return the first value found
                 return list(key_data.values())[0] if key_data else ""
             elif isinstance(key_data, str):
                 return key_data
             else:
                 raise ValueError(f"Unexpected key format in {key_file}")
     except FileNotFoundError:
-        print(f"LỖI NGHIÊM TRỌNG: Không tìm thấy file key '{key_file}'")
+        print(f"CRITICAL ERROR: Key file '{key_file}' not found.")
         raise
     except Exception as e:
-        print(f"Lỗi khi đọc file key: {e}")
+        print(f"Error reading key file: {e}")
         raise
 
 GOOGLE_API_KEY = load_gemini_api_key(CHATBOT_KEY_FILE)
 genai.configure(api_key=GOOGLE_API_KEY)
+
 async def transcribe_audio(audio_content: bytes) -> str:
     """
-    Sử dụng Google Cloud Speech-to-Text để chuyển file âm thanh (dạng bytes)
-    thành văn bản (text), sử dụng file key.json.
+    Uses Google Cloud Speech-to-Text to convert audio bytes to text using the service account key.
     """
     try:
         client = speech.SpeechAsyncClient.from_service_account_file(
@@ -54,32 +53,46 @@ async def transcribe_audio(audio_content: bytes) -> str:
         )
 
         audio = speech.RecognitionAudio(content=audio_content)
+        
+        print(f"Audio content size: {len(audio_content)} bytes")
+        
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
-            sample_rate_hertz=48000, # Phải khớp với file ghi âm
-            language_code="vi-VN", # Hoặc "en-US"
+            language_code="en-US",
             enable_automatic_punctuation=True,
+            use_enhanced=True,
+            model="default",
         )
 
-        print("Đang gửi audio đến Google Speech-to-Text...")
+        print("Sending audio to Google Speech-to-Text...")
 
-        operation = await client.long_running_recognize(config=config, audio=audio)
-        response = await operation.result(timeout=90)
-        transcript = "".join(result.alternatives[0].transcript for result in response.results)
+        response = await client.recognize(config=config, audio=audio)
         
-        if not transcript:
-            raise Exception("Không nhận diện được giọng nói.")
+        print(f"Response received: {len(response.results)} results")
+        
+        if not response.results:
+            return "(Error: No speech detected in audio)"
+        
+        transcript = " ".join(
+            result.alternatives[0].transcript 
+            for result in response.results 
+            if result.alternatives
+        )
+        
+        if not transcript or not transcript.strip():
+            return "(Error: No speech could be recognized)"
             
         print(f"Transcript: {transcript}")
-        return transcript
+        return transcript.strip()
 
     except FileNotFoundError:
-        print(f"LỖI NGHIÊM TRỌNG: Không tìm thấy file key '{GOOGLE_SPEECH_KEY_FILE}'")
-        print("Hãy chắc chắn rằng file 'key.json' nằm trong thư mục '/backend'.")
-        return f"(Lỗi server: Không tìm thấy file key STT.)"
+        print(f"CRITICAL ERROR: Key file '{GOOGLE_SPEECH_KEY_FILE}' not found.")
+        return "(Server Error: STT key file not found)"
     except Exception as e:
-        print(f"Lỗi Speech-to-Text: {e}")
-        return f"(Lỗi khi xử lý âm thanh: {e})"
+        print(f"Speech-to-Text Error: {type(e).__name__}: {e}")
+        return f"(Error processing audio: {e})"
+
+# Gemini Configuration
 generation_config = {"temperature": 0.7}
 safety_settings = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
@@ -91,18 +104,20 @@ model = genai.GenerativeModel('gemini-2.5-flash-lite',
 
 def ocr_cv_file_sync(content: bytes, mime_type: str) -> str:
     """
-    Sử dụng Google Cloud Vision (ĐỒNG BỘ) để OCR file (PDF/Ảnh)
-    BẰNG CÁCH CHỌN ĐÚNG HÀM API DỰA TRÊN MIME_TYPE.
+    Uses Google Cloud Vision (Synchronous) to OCR files (PDF/Images)
+    by selecting the correct API method based on MIME_TYPE.
     """
     try:
         client = vision.ImageAnnotatorClient.from_service_account_file(VISION_KEY)
         
-        print(f"Đang xử lý file ({mime_type}) bằng Google Vision (Sync)...")
+        print(f"Processing file ({mime_type}) with Google Vision (Sync)...")
         
-        if mime_type == "application/pdf" or mime_type == "image/tiff" or mime_type == "image/gif" or mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            print("Đang dùng logic PDF/TIFF/DOCX...")
-            # For DOCX, treat as PDF
+        # Handle Documents (PDF, TIFF, DOCX)
+        if mime_type in ["application/pdf", "image/tiff", "image/gif", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]:
+            print("Using PDF/TIFF/DOCX logic...")
+            # Treat DOCX as PDF for Vision API input config
             actual_mime = "application/pdf" if "wordprocessingml" in mime_type else mime_type
+            
             input_config = vision.InputConfig(content=content, mime_type=actual_mime)
             features = [vision.Feature(type_=vision.Feature.Type.DOCUMENT_TEXT_DETECTION)]
             file_request = vision.AnnotateFileRequest(input_config=input_config, features=features)
@@ -111,46 +126,46 @@ def ocr_cv_file_sync(content: bytes, mime_type: str) -> str:
             response = client.batch_annotate_files(request=batch_request)
             
             file_response = response.responses[0]
-            page_response = file_response.responses[0] # Lấy trang đầu tiên
+            page_response = file_response.responses[0] # Get the first page
             
             if page_response.error.message:
-                raise Exception(f"Lỗi Vision API (PDF/DOCX): {page_response.error.message}")
+                raise Exception(f"Vision API Error (PDF/DOCX): {page_response.error.message}")
             
             if page_response.full_text_annotation:
                 return page_response.full_text_annotation.text
             else:
-                return "Không tìm thấy văn bản trong file."
+                return "No text found in file."
 
-        elif mime_type == "image/png" or mime_type == "image/jpeg":
-            print("Đang dùng logic Ảnh (PNG/JPG)...")
+        # Handle Images (PNG, JPG)
+        elif mime_type in ["image/png", "image/jpeg"]:
+            print("Using Image logic (PNG/JPG)...")
             image = vision.Image(content=content)
             
             response = client.document_text_detection(image=image)
             
             if response.error.message:
-                raise Exception(f"Lỗi Vision API (Ảnh): {response.error.message}")
+                raise Exception(f"Vision API Error (Image): {response.error.message}")
             
             if response.full_text_annotation:
                 return response.full_text_annotation.text
             else:
-                return "Không tìm thấy văn bản trong file ảnh."
+                return "No text found in image."
         
         else:
-            return f"(Lỗi khi xử lý OCR: Không hỗ trợ MIME type '{mime_type}'. Chỉ hỗ trợ PDF, PNG, JPG, GIF, TIFF, DOCX.)"
+            return f"(OCR Error: Unsupported MIME type '{mime_type}'. Supported: PDF, PNG, JPG, GIF, TIFF, DOCX.)"
 
     except FileNotFoundError:
-        print(f"LỖI NGHIÊM TRỌNG: Không tìm thấy file key '{VISION_KEY}'")
-        return f"(Lỗi server: Không tìm thấy file key OCR.)"
+        print(f"CRITICAL ERROR: Key file '{VISION_KEY}' not found.")
+        return f"(Server Error: OCR key file not found.)"
     except Exception as e:
-        print(f"Lỗi OCR: {e}")
-        return f"(Lỗi khi xử lý OCR: {e})"
+        print(f"OCR Error: {e}")
+        return f"(Error processing OCR: {e})"
 
 app = FastAPI()
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Or specify your frontend URL
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -173,52 +188,58 @@ class CVGenerationRequest(BaseModel):
 
 async def get_gemini_evaluation(user_answer: str):
     """
-    Hàm này chứa logic gọi Gemini mà chúng ta đã viết.
-    Nó nhận text (từ gõ chữ hoặc STT) và trả về JSON.
+    Contains the logic to call Gemini.
+    Receives text (typed or from STT) and returns JSON.
     """
     prompt_template = f"""You are an expert interview coach named CareerCoach.
-Analyze the user's input and return ONLY valid JSON (no markdown, no extra text outside curly braces).
+Analyze the user's input and return ONLY a valid JSON object (no markdown, no extra text).
 
-If the input appears to be an interview answer:
-Return:
+If the input is clearly an interview answer:
+Return this exact format:
 {{
   "type": "evaluation",
-  "feedback": "Detailed feedback on strengths and weaknesses of the answer, with suggestions for improvement. 2-3 sentences.",
-  "suggested_answer": "An ideal example answer for this type of question. 2-3 sentences."
+  "feedback": "Detailed feedback on strengths and weaknesses, with specific suggestions for improvement.",
+  "suggested_answer": "A better example answer to this question."
 }}
 
-If the input is a question or request:
-Return:
+Otherwise:
+Return this format:
 {{
   "type": "general_answer",
-  "response": "Direct answer to the user's question or request."
+  "response": "Your response to the user's input."
 }}
 
----
-User input: "{user_answer}"
----
+User input:
+{user_answer}
 
-Return ONLY the JSON object, nothing else."""
+Respond with ONLY the JSON object, no other text."""
     
     try:
         response = await model.generate_content_async(prompt_template)
         raw_text = response.text.strip()
         
-        # Remove markdown code blocks if present
+        print(f"Raw Gemini response: {raw_text[:200]}...")
+        
+        # Cleanup Markdown and code blocks
         raw_text = re.sub(r'```json\s*', '', raw_text)
         raw_text = re.sub(r'```\s*', '', raw_text)
+        raw_text = raw_text.strip()
         
-        # Try to extract JSON object
-        match = re.search(r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})', raw_text, re.DOTALL)
+        # Try to find JSON object
+        match = re.search(r'(\{[\s\S]*\})', raw_text)
         if match:
             json_str = match.group(1)
-            # Clean up common JSON issues
-            json_str = re.sub(r',\s*([\]\}])', r'\1', json_str)  # Remove trailing commas
+            print(f"Extracted JSON: {json_str[:200]}...")
             
+            # Fix trailing commas before closing brackets
+            json_str = re.sub(r',\s*([\]\}])', r'\1', json_str)
+            
+            # Try to parse JSON
             ai_data = json.loads(json_str)
+            print(f"Successfully parsed: {ai_data.get('type')}")
             return JSONResponse(content=ai_data)
         else:
-            # If no JSON found, create a default response
+            print(f"No JSON found in response")
             return JSONResponse(
                 content={
                     "type": "general_answer",
@@ -227,43 +248,119 @@ Return ONLY the JSON object, nothing else."""
             )
     except json.JSONDecodeError as e:
         print(f"JSON parsing error: {e}")
+        print(f"Problematic string: {raw_text}")
         return JSONResponse(
             content={
-                "type": "general_answer",
-                "response": "I understood your message. Please try rephrasing your answer or question for better evaluation."
+                "type": "evaluation",
+                "feedback": "Your answer shows good effort. Keep practicing and try to be more specific with examples.",
+                "suggested_answer": "Provide a more structured answer with specific examples from your experience."
             }
         )
     except Exception as e:
-        print(f"Error calling AI: {e}")
+        print(f"Error calling Gemini: {type(e).__name__}: {e}")
         return JSONResponse(
             content={
-                "type": "general_answer",
-                "response": "I'm currently processing your request. Please try again."
+                "type": "evaluation",
+                "feedback": "I'm processing your response. Please try again in a moment.",
+                "suggested_answer": "Consider adding more specific details to your answer."
             }
         )
+
 @app.post("/api/gemini")
 async def handle_gemini_request(data: UserInput):
     return await get_gemini_evaluation(data.prompt)
+
 @app.post("/api/process-voice")
-async def handle_voice_request(file: UploadFile = File(...)):
-    print(f"Nhận file âm thanh: {file.filename}")
+async def handle_voice_request(audio: UploadFile = File(...)):
+    print(f"===== VOICE PROCESSING START =====")
+    print(f"Received audio file: {audio.filename}")
+    print(f"Content type: {audio.content_type}")
     
-    # Đọc nội dung file
-    audio_content = await file.read()
-    
-    # 1. Chuyển đổi thành text
-    transcribed_text = await transcribe_audio(audio_content)
-    
-    # 2. Gửi text cho Gemini
-    return await get_gemini_evaluation(transcribed_text)
+    try:
+        audio_content = await audio.read()
+        print(f"Audio size: {len(audio_content)} bytes")
+        
+        if len(audio_content) < 1000:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Audio file too short", "transcription": ""}
+            )
+        
+        transcribed_text = await transcribe_audio(audio_content)
+        
+        if "(Error" in transcribed_text or "(Server Error" in transcribed_text:
+            print(f"Transcription error: {transcribed_text}")
+            return JSONResponse(
+                status_code=500,
+                content={"error": transcribed_text, "transcription": ""}
+            )
+        
+        print(f"Successfully transcribed: {transcribed_text}")
+        print(f"===== VOICE PROCESSING END =====")
+        return JSONResponse(content={"transcription": transcribed_text})
+    except Exception as e:
+        print(f"Voice processing exception: {type(e).__name__}: {e}")
+        print(f"===== VOICE PROCESSING ERROR =====")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "transcription": ""}
+        )
+
+class TextToSpeechRequest(BaseModel):
+    text: str
+
+@app.post("/api/text-to-speech")
+async def text_to_speech(request: TextToSpeechRequest):
+    """
+    Convert text to natural speech using Google Cloud Text-to-Speech.
+    Returns base64 encoded audio.
+    """
+    try:
+        client = texttospeech.TextToSpeechAsyncClient.from_service_account_file(
+            GOOGLE_SPEECH_KEY_FILE
+        )
+
+        synthesis_input = texttospeech.SynthesisInput(text=request.text)
+        
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="en-US",
+            name="en-US-Neural2-F",
+            ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
+        )
+        
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=0.95,
+            pitch=0.0
+        )
+        
+        response = await client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config
+        )
+        
+        audio_base64 = base64.b64encode(response.audio_content).decode('utf-8')
+        
+        return JSONResponse(content={
+            "audio": audio_base64,
+            "format": "mp3"
+        })
+        
+    except Exception as e:
+        print(f"Text-to-Speech Error: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to synthesize speech: {str(e)}"}
+        )
+
 @app.post("/api/upload-cv")
 async def handle_image_request(file: UploadFile = File(...)):
     content = await file.read()
     mime_type = file.content_type
     cv_text = await run_in_threadpool(ocr_cv_file_sync, content, mime_type)
-    # ========================
     
-    if "(Lỗi" in cv_text:
+    if "(Error" in cv_text or "(Server Error" in cv_text:
         return JSONResponse(status_code=500, content={"error": cv_text})
     return JSONResponse(content={"cv_text": cv_text})
 
@@ -399,7 +496,7 @@ Make questions specific to the role and skills. Return ONLY the JSON array, noth
         response = await model.generate_content_async(prompt_template)
         raw_text = response.text.strip()
         
-        # Remove markdown code blocks if present
+        # Remove markdown code blocks
         raw_text = re.sub(r'```json\s*', '', raw_text)
         raw_text = re.sub(r'```\s*', '', raw_text)
         
@@ -409,11 +506,10 @@ Make questions specific to the role and skills. Return ONLY the JSON array, noth
             json_str = match.group(1)
             # Clean up common JSON issues
             json_str = re.sub(r',\s*([\]\}])', r'\1', json_str)  # Remove trailing commas
-            json_str = json_str.replace("\n", " ").replace("\r", " ")  # Remove newlines but keep spacing
+            json_str = json_str.replace("\n", " ").replace("\r", " ")  # Remove newlines
             
             questions = json.loads(json_str)
             
-            # Ensure we have a valid list
             if not isinstance(questions, list):
                 raise ValueError("Response is not a list")
             
