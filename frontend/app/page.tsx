@@ -4,11 +4,11 @@ import { useState, useEffect } from "react";
 
 export default function HomePage() {
   const fields: string[] = [
-    "Software Engineer",
-    "Data Scientist",
-    "Product Manager",
-    "UX Designer",
-    "Business Analyst",
+    "Kĩ sư phần mềm",
+    "Khoa học dữ liệu",
+    "Quản lý sản phẩm",
+    "Thiết kế giao diện",
+    "Phân tích kinh doanh",
   ];
 
   const [currentField, setCurrentField] = useState(fields[0]);
@@ -46,18 +46,18 @@ export default function HomePage() {
           </span>
         </h1>
         <h2 className="w-full text-center text-gray-600 font-semibold text-2xl mt-8">
-          A quick way to prepare for your next interview in{" "}
+          Lựa chọn thông minh để luyện tập phỏng vấn về{" "}
           <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-600 to-cyan-600 transition-all duration-500">
             {currentField}
           </span>
         </h2>
         <p className="w-full text-center text-gray-500 text-lg mt-4 max-w-2xl px-4">
-          Upload your CV, get personalized feedback, and find jobs that match
-          your skills
+          Tải CV của bạn lên, nhận phản hồi cá nhân và tìm công việc phù hợp với
+          kỹ năng của bạn
         </p>
         <a href="/CareerCoach/start" className="mt-8">
           <button className="btn btn-lg px-20 py-6 rounded-full text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all text-white border-none bg-gradient-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90%">
-            Start Your Journey
+            Bắt đầu lộ trình của bạn
           </button>
         </a>
 

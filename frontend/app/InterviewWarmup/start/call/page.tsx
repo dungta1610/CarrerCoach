@@ -31,24 +31,24 @@ const CallPage: React.FC = () => {
     if (data) {
       const parsedContext = JSON.parse(data);
       setContext(parsedContext);
-      // Auto-generate questions when page loads
+      // Tự động tạo câu hỏi khi trang được tải
       if (!llmCalled) {
         setTimeout(() => {
           generateQuestions(parsedContext);
         }, 500);
       }
     } else {
-      setContext({ field: "General", role: "Professional", skills: [] });
+      setContext({ field: "Chung", role: "Chuyên nghiệp", skills: [] });
     }
   }, []);
 
-  // Store answers for each question
+  // Lưu câu trả lời cho mỗi câu hỏi
   const [answers, setAnswers] = useState<{ [key: string]: string }>({});
-  // Store AI feedback for each question
+  // Lưu phản hồi của AI cho mỗi câu hỏi
   const [feedback, setFeedback] = useState<{
     [key: string]: { advice: string; suggested_answer?: string };
   }>({});
-  // Track which questions are being evaluated
+  // Theo dõi câu hỏi nào đang được đánh giá
   const [evaluating, setEvaluating] = useState<{ [key: string]: boolean }>({});
 
   const handleAnswerChange = (
@@ -69,17 +69,18 @@ const CallPage: React.FC = () => {
     const answer = answers[key];
 
     if (!answer || answer.trim() === "") {
-      alert("Please provide an answer before submitting!");
+      alert("Vui lòng nhập câu trả lời trước khi gửi!");
       return;
     }
 
     setEvaluating((prev) => ({ ...prev, [key]: true }));
 
     try {
+      // Prompt này gửi sang backend, backend đã được việt hóa để hiểu context này
       const questionContext = `Interview Question: ${question}\n\nMy Answer: ${answer}\n\nPlease evaluate my answer to this interview question.`;
-      
+
       console.log(`Sending feedback request for ${key}...`);
-      
+
       const res = await fetch("http://localhost:8000/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -93,14 +94,14 @@ const CallPage: React.FC = () => {
       const data = await res.json();
       console.log(`Feedback response for ${key}:`, data);
 
-      // Extract feedback from the response
+      // Trích xuất phản hồi từ response
       if (data.type === "evaluation" && data.feedback) {
         console.log(`Setting evaluation feedback for ${key}`);
         setFeedback((prev) => {
           const updated = {
             ...prev,
             [key]: {
-              advice: data.feedback || "No feedback provided",
+              advice: data.feedback || "Không có phản hồi",
               suggested_answer: data.suggested_answer,
             },
           };
@@ -115,7 +116,7 @@ const CallPage: React.FC = () => {
             [key]: {
               advice:
                 data.response ||
-                "Please provide a more detailed answer to the interview question.",
+                "Vui lòng cung cấp câu trả lời chi tiết hơn cho câu hỏi phỏng vấn này.",
             },
           };
           console.log(`Feedback state updated:`, updated);
@@ -126,13 +127,13 @@ const CallPage: React.FC = () => {
         setFeedback((prev) => ({
           ...prev,
           [key]: {
-            advice: "Unable to evaluate. Please try again.",
+            advice: "Không thể đánh giá. Vui lòng thử lại.",
           },
         }));
       }
     } catch (error) {
       console.error("Error evaluating answer:", error);
-      alert("Failed to evaluate answer. Please try again.");
+      alert("Đánh giá thất bại. Vui lòng thử lại.");
     } finally {
       setEvaluating((prev) => ({ ...prev, [key]: false }));
     }
@@ -142,7 +143,7 @@ const CallPage: React.FC = () => {
     const key = `${category}-${index}`;
 
     if (isRecording[key]) {
-      // Stop recording
+      // Dừng ghi âm
       if (mediaRecorder) {
         mediaRecorder.stop();
       }
@@ -151,16 +152,18 @@ const CallPage: React.FC = () => {
     }
 
     try {
-      // Start recording with optimized settings
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      // Bắt đầu ghi âm với cài đặt tối ưu
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 48000
-        }
+          sampleRate: 48000,
+        },
       });
-      
-      const options: MediaRecorderOptions = { mimeType: 'audio/webm;codecs=opus' };
+
+      const options: MediaRecorderOptions = {
+        mimeType: "audio/webm;codecs=opus",
+      };
       const recorder = new MediaRecorder(stream, options);
       const audioChunks: Blob[] = [];
 
@@ -171,16 +174,18 @@ const CallPage: React.FC = () => {
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm;codecs=opus" });
-        
+        const audioBlob = new Blob(audioChunks, {
+          type: "audio/webm;codecs=opus",
+        });
+
         console.log(`Audio recorded: ${audioBlob.size} bytes`);
-        
+
         if (audioBlob.size < 1000) {
-          alert("Recording too short. Please speak for at least 1 second.");
+          alert("Bản ghi quá ngắn. Vui lòng nói ít nhất 1 giây.");
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
-        
+
         const formData = new FormData();
         formData.append("audio", audioBlob, "audio.webm");
 
@@ -193,7 +198,11 @@ const CallPage: React.FC = () => {
           if (!res.ok) {
             const errorData = await res.json();
             console.error("Transcription error:", errorData);
-            alert(`Failed to transcribe audio: ${errorData.error || 'Unknown error'}`);
+            alert(
+              `Lỗi chuyển đổi âm thanh: ${
+                errorData.error || "Lỗi không xác định"
+              }`
+            );
             return;
           }
 
@@ -204,11 +213,13 @@ const CallPage: React.FC = () => {
               [key]: (prev[key] || "") + " " + data.transcription,
             }));
           } else {
-            alert("No speech detected. Please try speaking more clearly.");
+            alert("Không phát hiện giọng nói. Vui lòng nói rõ hơn.");
           }
         } catch (error) {
           console.error("Error transcribing audio:", error);
-          alert("Failed to transcribe audio. Please check your internet connection and try again.");
+          alert(
+            "Lỗi kết nối khi xử lý âm thanh. Vui lòng kiểm tra mạng và thử lại."
+          );
         }
 
         stream.getTracks().forEach((track) => track.stop());
@@ -219,12 +230,12 @@ const CallPage: React.FC = () => {
       setIsRecording((prev) => ({ ...prev, [key]: true }));
     } catch (error) {
       console.error("Error accessing microphone:", error);
-      alert("Failed to access microphone. Please check your permissions.");
+      alert("Không thể truy cập microphone. Vui lòng kiểm tra quyền truy cập.");
     }
   };
 
   const generateQuestions = async (contextData: InterviewContext) => {
-    setLLMResponse("Loading...");
+    setLLMResponse("Đang tải...");
     try {
       const res = await fetch("http://localhost:8000/api/generate-questions", {
         method: "POST",
@@ -240,17 +251,17 @@ const CallPage: React.FC = () => {
       const questions = Array.isArray(data) ? data : data.questions;
 
       if (Array.isArray(questions)) {
-        // Store questions in localStorage for live demo
+        // Lưu câu hỏi vào localStorage cho live demo
         localStorage.setItem("interviewQuestions", JSON.stringify(questions));
         setLLMResponse(questions.join("\n"));
       } else {
-        setLLMResponse(data.error ?? "No response");
+        setLLMResponse(data.error ?? "Không có phản hồi");
       }
 
       setLLMCalled(true);
     } catch (error) {
       console.error("Error generating questions:", error);
-      setLLMResponse("Error generating questions. Please try again.");
+      setLLMResponse("Lỗi khi tạo câu hỏi. Vui lòng thử lại.");
       setLLMCalled(true);
     }
   };
@@ -262,6 +273,7 @@ const CallPage: React.FC = () => {
 
   useEffect(() => {
     if (llmCalled) {
+      // Regex này phải giữ nguyên tiếng Anh vì Backend trả về tag [Background]...
       const regex = /^\*?\s*\[(Background|Situation|Technical)]\s+(.+?)\s*$/gm;
 
       let match: RegExpExecArray | null;
@@ -317,14 +329,8 @@ const CallPage: React.FC = () => {
                   d="M10 19l-7-7m0 0l7-7m-7 7h18"
                 />
               </svg>
-              Back to Home
+              Về trang chủ
             </Link>
-            {/* <p className="text-base text-gray-600 pl-4 mb-4">
-              Preparing for:{" "}
-              <span className="font-semibold text-blue-600">
-                {context?.role || "Loading..."}
-              </span>
-            </p> */}
           </div>
         </div>
 
@@ -333,14 +339,16 @@ const CallPage: React.FC = () => {
             <div className="text-center py-2">
               <span className="loading loading-spinner loading-md text-purple-600"></span>
               <p className="text-lg font-medium text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600 mt-2">
-                Generating questions...
+                Đang tạo câu hỏi...
               </p>
             </div>
           ) : (
             <Link
               href="/InterviewWarmup/start/call/livedemo"
               className="btn btn-lg rounded-full border-0 text-white font-semibold shadow-lg hover:shadow-xl transition-all"
-              style={{background: 'linear-gradient(135deg, #9333ea 0%, #6366f1 100%)'}}
+              style={{
+                background: "linear-gradient(135deg, #9333ea 0%, #6366f1 100%)",
+              }}
             >
               <svg
                 className="w-5 h-5"
@@ -355,7 +363,7 @@ const CallPage: React.FC = () => {
                   d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
                 />
               </svg>
-              Live Demo
+              Demo Trực tiếp
             </Link>
           )}
         </div>
@@ -370,7 +378,7 @@ const CallPage: React.FC = () => {
               borderColor: "#2563eb",
             }}
           >
-            Next to Recommendations
+            Xem Đề xuất
             <svg
               className="w-5 h-5"
               fill="none"
@@ -394,13 +402,13 @@ const CallPage: React.FC = () => {
             type="radio"
             name="my_tabs_6"
             className="tab h-12 text-base font-medium text-gray-500 aria-checked:text-indigo-600 aria-checked:border-indigo-600"
-            aria-label="Background"
+            aria-label="Bối cảnh"
             defaultChecked
           />
           <div className="tab-content p-6 w-full bg-transparent border-none">
             {backgroundQuestions.length === 0 ? (
               <p className="text-sm text-gray-500">
-                No background questions yet
+                Chưa có câu hỏi bối cảnh nào
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-6">
@@ -421,7 +429,7 @@ const CallPage: React.FC = () => {
                         </span>
                         <div className="flex-1">
                           <span className="inline-block bg-red-100 text-red-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">
-                            Background
+                            Bối cảnh
                           </span>
                           <p className="text-base text-gray-800 font-medium leading-relaxed">
                             {q}
@@ -431,13 +439,13 @@ const CallPage: React.FC = () => {
 
                       <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Your Answer:
+                          Câu trả lời của bạn:
                         </label>
                         <div className="relative">
                           <textarea
                             className="w-full px-4 py-3 pr-12 rounded-lg border border-red-200 focus:border-red-400 focus:ring-2 focus:ring-red-200 outline-none transition-all resize-none"
                             rows={4}
-                            placeholder="Type your answer here or use voice input..."
+                            placeholder="Nhập câu trả lời hoặc dùng giọng nói..."
                             value={answers[key] || ""}
                             onChange={(e) =>
                               handleAnswerChange(
@@ -457,9 +465,7 @@ const CallPage: React.FC = () => {
                             onClick={() => handleVoiceInput("Background", idx)}
                             disabled={!!hasFeedback}
                             title={
-                              isRecording[key]
-                                ? "Stop recording"
-                                : "Start voice input"
+                              isRecording[key] ? "Dừng ghi âm" : "Bắt đầu nói"
                             }
                           >
                             {isRecording[key] ? (
@@ -500,10 +506,10 @@ const CallPage: React.FC = () => {
                           {isEvaluating ? (
                             <>
                               <span className="loading loading-spinner loading-sm"></span>
-                              Evaluating...
+                              Đang đánh giá...
                             </>
                           ) : (
-                            "Submit Answer"
+                            "Gửi câu trả lời"
                           )}
                         </button>
                       )}
@@ -525,7 +531,7 @@ const CallPage: React.FC = () => {
                               />
                             </svg>
                             <h4 className="font-semibold text-gray-800">
-                              AI Feedback
+                              Đánh giá từ AI
                             </h4>
                           </div>
                           <p className="text-sm text-gray-700 leading-relaxed mb-3">
@@ -533,7 +539,9 @@ const CallPage: React.FC = () => {
                           </p>
                           {feedback[key].suggested_answer && (
                             <div className="mt-3 pt-3 border-t border-gray-200">
-                              <p className="text-xs font-semibold text-gray-600 mb-2">Suggested Answer:</p>
+                              <p className="text-xs font-semibold text-gray-600 mb-2">
+                                Câu trả lời gợi ý:
+                              </p>
                               <p className="text-sm text-gray-600 leading-relaxed italic">
                                 {feedback[key].suggested_answer}
                               </p>
@@ -563,7 +571,7 @@ const CallPage: React.FC = () => {
                                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                               />
                             </svg>
-                            Try Again
+                            Thử lại
                           </button>
                         </div>
                       )}
@@ -578,12 +586,12 @@ const CallPage: React.FC = () => {
             type="radio"
             name="my_tabs_6"
             className="tab h-12 text-base font-medium text-gray-500 aria-checked:text-indigo-600 aria-checked:border-indigo-600"
-            aria-label="Situation"
+            aria-label="Tình huống"
           />
           <div className="tab-content p-6 w-full bg-transparent border-none">
             {situationQuestions.length === 0 ? (
               <p className="text-sm text-gray-500">
-                No situation questions yet
+                Chưa có câu hỏi tình huống nào
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-6">
@@ -604,7 +612,7 @@ const CallPage: React.FC = () => {
                         </span>
                         <div className="flex-1">
                           <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">
-                            Situation
+                            Tình huống
                           </span>
                           <p className="text-base text-gray-800 font-medium leading-relaxed">
                             {q}
@@ -614,13 +622,13 @@ const CallPage: React.FC = () => {
 
                       <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Your Answer:
+                          Câu trả lời của bạn:
                         </label>
                         <div className="relative">
                           <textarea
                             className="w-full px-4 py-3 pr-12 rounded-lg border border-blue-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none"
                             rows={4}
-                            placeholder="Type your answer here or use voice input..."
+                            placeholder="Nhập câu trả lời hoặc dùng giọng nói..."
                             value={answers[key] || ""}
                             onChange={(e) =>
                               handleAnswerChange(
@@ -640,9 +648,7 @@ const CallPage: React.FC = () => {
                             onClick={() => handleVoiceInput("Situation", idx)}
                             disabled={!!hasFeedback}
                             title={
-                              isRecording[key]
-                                ? "Stop recording"
-                                : "Start voice input"
+                              isRecording[key] ? "Dừng ghi âm" : "Bắt đầu nói"
                             }
                           >
                             {isRecording[key] ? (
@@ -683,10 +689,10 @@ const CallPage: React.FC = () => {
                           {isEvaluating ? (
                             <>
                               <span className="loading loading-spinner loading-sm"></span>
-                              Evaluating...
+                              Đang đánh giá...
                             </>
                           ) : (
-                            "Submit Answer"
+                            "Gửi câu trả lời"
                           )}
                         </button>
                       )}
@@ -694,11 +700,21 @@ const CallPage: React.FC = () => {
                       {hasFeedback && (
                         <div className="mt-4 bg-white rounded-lg p-4 border-l-4 border-blue-500">
                           <div className="flex items-center gap-2 mb-2">
-                            <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <svg
+                              className="w-6 h-6 text-blue-500"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
                             </svg>
                             <h4 className="font-semibold text-gray-800">
-                              AI Evaluation
+                              Đánh giá từ AI
                             </h4>
                           </div>
                           <p className="text-sm text-gray-700 leading-relaxed">
@@ -728,7 +744,7 @@ const CallPage: React.FC = () => {
                                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                               />
                             </svg>
-                            Try Again
+                            Thử lại
                           </button>
                         </div>
                       )}
@@ -743,12 +759,12 @@ const CallPage: React.FC = () => {
             type="radio"
             name="my_tabs_6"
             className="tab h-12 text-base font-medium text-gray-500 aria-checked:text-indigo-600 aria-checked:border-indigo-600"
-            aria-label="Technical"
+            aria-label="Chuyên môn"
           />
           <div className="tab-content p-6 w-full bg-transparent border-none">
             {technicalQuestions.length === 0 ? (
               <p className="text-sm text-gray-500">
-                No technical questions yet
+                Chưa có câu hỏi chuyên môn nào
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-6">
@@ -769,7 +785,7 @@ const CallPage: React.FC = () => {
                         </span>
                         <div className="flex-1">
                           <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full mb-2">
-                            Technical
+                            Chuyên môn
                           </span>
                           <p className="text-base text-gray-800 font-medium leading-relaxed">
                             {q}
@@ -779,13 +795,13 @@ const CallPage: React.FC = () => {
 
                       <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Your Answer:
+                          Câu trả lời của bạn:
                         </label>
                         <div className="relative">
                           <textarea
                             className="w-full px-4 py-3 pr-12 rounded-lg border border-green-200 focus:border-green-400 focus:ring-2 focus:ring-green-200 outline-none transition-all resize-none"
                             rows={4}
-                            placeholder="Type your answer here or use voice input..."
+                            placeholder="Nhập câu trả lời hoặc dùng giọng nói..."
                             value={answers[key] || ""}
                             onChange={(e) =>
                               handleAnswerChange(
@@ -805,9 +821,7 @@ const CallPage: React.FC = () => {
                             onClick={() => handleVoiceInput("Technical", idx)}
                             disabled={!!hasFeedback}
                             title={
-                              isRecording[key]
-                                ? "Stop recording"
-                                : "Start voice input"
+                              isRecording[key] ? "Dừng ghi âm" : "Bắt đầu nói"
                             }
                           >
                             {isRecording[key] ? (
@@ -848,10 +862,10 @@ const CallPage: React.FC = () => {
                           {isEvaluating ? (
                             <>
                               <span className="loading loading-spinner loading-sm"></span>
-                              Evaluating...
+                              Đang đánh giá...
                             </>
                           ) : (
-                            "Submit Answer"
+                            "Gửi câu trả lời"
                           )}
                         </button>
                       )}
@@ -873,7 +887,7 @@ const CallPage: React.FC = () => {
                               />
                             </svg>
                             <h4 className="font-semibold text-gray-800">
-                              AI Feedback
+                              Đánh giá từ AI
                             </h4>
                           </div>
                           <p className="text-sm text-gray-700 leading-relaxed">
@@ -903,7 +917,7 @@ const CallPage: React.FC = () => {
                                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                               />
                             </svg>
-                            Try Again
+                            Thử lại
                           </button>
                         </div>
                       )}

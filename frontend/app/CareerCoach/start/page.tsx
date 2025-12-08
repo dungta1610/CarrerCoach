@@ -30,7 +30,7 @@ export default function Start() {
 
       const uploadData = await uploadRes.json();
       if (uploadData.error) {
-        alert(`Error: ${uploadData.error}`);
+        alert(`Lỗi: ${uploadData.error}`); // Vietsub
         setAnalyzing(false);
         return;
       }
@@ -45,7 +45,7 @@ export default function Start() {
 
       const analysisData = await analysisRes.json();
       if (analysisData.error) {
-        alert(`Analysis Error: ${analysisData.error}`);
+        alert(`Lỗi phân tích: ${analysisData.error}`); // Vietsub
         setAnalyzing(false);
         return;
       }
@@ -56,7 +56,7 @@ export default function Start() {
       setStep("skills");
     } catch (error) {
       console.error("CV Upload Error:", error);
-      alert("Failed to upload CV. Please try again.");
+      alert("Tải lên CV thất bại. Vui lòng thử lại."); // Vietsub
     } finally {
       setAnalyzing(false);
     }
@@ -84,36 +84,53 @@ export default function Start() {
 
   const handleManualInput = () => {
     if (!manualRole) {
-      alert("Please enter your current role");
+      alert("Vui lòng nhập vai trò hiện tại của bạn");
       return;
     }
-    const skills = manualSkillsInput.split(",").map(s => s.trim()).filter(s => s);
-    setExtractedSkills(skills.length > 0 ? skills : ["Communication", "Problem Solving", "Teamwork"]);
-    setExtractedTasks(["Manage projects", "Collaborate with teams", "Deliver results"]);
+    const skills = manualSkillsInput
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s);
+
+    // --- KHU VỰC CẦN SỬA 1: Dữ liệu mặc định khi nhập thủ công ---
+    setExtractedSkills(
+      skills.length > 0
+        ? skills
+        : ["Giao tiếp", "Giải quyết vấn đề", "Làm việc nhóm"] // Đã Vietsub
+    );
+    setExtractedTasks([
+      "Quản lý dự án",
+      "Hợp tác với đội nhóm",
+      "Bàn giao kết quả",
+    ]); // Đã Vietsub
+
     setAnalysisResult({
       extracted_role: manualRole,
       skills: skills,
-      experience_years: "Not specified",
-      experience_summary: "Manual entry - no CV uploaded",
-      education: "Not specified",
-      strengths: ["Self-motivated", "Quick learner"],
-      weaknesses: ["Limited documented experience"],
+      experience_years: "Chưa xác định", // Đã Vietsub
+      experience_summary: "Nhập thủ công - chưa có CV", // Đã Vietsub
+      education: "Chưa xác định", // Đã Vietsub
+      strengths: ["Tự chủ động", "Học hỏi nhanh"], // Đã Vietsub
+      weaknesses: ["Kinh nghiệm chưa được ghi nhận rõ ràng"], // Đã Vietsub
       learning_path: {
-        immediate: ["Build a professional CV"],
-        short_term: ["Gain relevant certifications"],
-        long_term: ["Expand professional network"]
+        immediate: ["Xây dựng CV chuyên nghiệp"], // Đã Vietsub
+        short_term: ["Lấy các chứng chỉ liên quan"], // Đã Vietsub
+        long_term: ["Mở rộng mạng lưới quan hệ"], // Đã Vietsub
       },
-      recommended_tasks: ["Manage projects", "Collaborate with teams"]
+      recommended_tasks: ["Quản lý dự án", "Hợp tác với đội nhóm"], // Đã Vietsub
     });
     setStep("skills");
   };
 
   const handleContinueToResult = () => {
-    localStorage.setItem("cvAnalysis", JSON.stringify({
-      ...analysisResult,
-      selectedSkills,
-      selectedTasks,
-    }));
+    localStorage.setItem(
+      "cvAnalysis",
+      JSON.stringify({
+        ...analysisResult,
+        selectedSkills,
+        selectedTasks,
+      })
+    );
     router.push("/CareerCoach/start/result");
   };
 
@@ -126,14 +143,24 @@ export default function Start() {
               Career Coach
             </h1>
             <p className="text-xl text-gray-600">
-              Upload your CV or enter your information manually
+              Tải lên CV của bạn hoặc nhập thông tin của bạn theo cách thủ công
             </p>
           </div>
 
           <div className="bg-white p-8 rounded-3xl shadow-lg border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors">
             <div className="text-center">
-              <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <svg
+                className="w-16 h-16 mx-auto mb-4 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
               </svg>
               <input
                 type="file"
@@ -149,19 +176,19 @@ export default function Start() {
                 htmlFor="cv-upload"
                 className="btn btn-primary btn-lg rounded-full px-12 cursor-pointer"
               >
-                Upload CV
+                Tải CV
               </label>
               <p className="text-sm text-gray-500 mt-4">
-                Supported: PDF, DOC, DOCX, PNG, JPG
+                Hỗ trợ: PDF, DOC, DOCX, PNG, JPG
               </p>
-              
-              <div className="divider">OR</div>
-              
+
+              <div className="divider">HOẶC</div>
+
               <button
                 onClick={() => setStep("manual")}
                 className="btn btn-outline btn-lg rounded-full px-12"
               >
-                Enter Manually
+                Nhập thủ công
               </button>
             </div>
           </div>
@@ -170,7 +197,7 @@ export default function Start() {
             <div className="mt-8 text-center">
               <span className="loading loading-spinner loading-lg text-primary"></span>
               <p className="text-lg text-gray-600 mt-4">
-                Analyzing your CV with AI...
+                Đang phân tích CV của bạn bằng AI...
               </p>
             </div>
           )}
@@ -181,48 +208,46 @@ export default function Start() {
         <div className="w-full max-w-2xl">
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">
-              Enter Your Information
+              Nhập thông tin của bạn
             </h2>
-            <p className="text-gray-600">
-              Fill in your professional details
-            </p>
+            <p className="text-gray-600">Điền thông tin chuyên môn của bạn</p>
           </div>
 
           <div className="space-y-6 bg-white p-8 rounded-2xl shadow-lg">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Current Role <span className="text-red-500">*</span>
+                Vị trí hiện tại <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={manualRole}
                 onChange={(e) => setManualRole(e.target.value)}
-                placeholder="e.g., Software Engineer, Marketing Manager"
+                placeholder="Ví dụ: Kĩ sư phần mềm, Quản lí dự án,..."
                 className="input input-bordered w-full"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Company (Optional)
+                Công ty (Tùy chọn)
               </label>
               <input
                 type="text"
                 value={manualCompany}
                 onChange={(e) => setManualCompany(e.target.value)}
-                placeholder="e.g., Google, Microsoft"
+                placeholder="Ví dụ: Google, Microsoft,..."
                 className="input input-bordered w-full"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Skills (Optional - comma separated)
+                Kỹ năng (Tùy chọn - phân tách bằng dấu phẩy)
               </label>
               <textarea
                 value={manualSkillsInput}
                 onChange={(e) => setManualSkillsInput(e.target.value)}
-                placeholder="e.g., JavaScript, Python, Leadership, Project Management"
+                placeholder="Ví dụ: JavaScript, Python, Quản lí dự án,..."
                 className="textarea textarea-bordered w-full h-24"
               />
             </div>
@@ -232,13 +257,13 @@ export default function Start() {
                 onClick={() => setStep("upload")}
                 className="btn btn-ghost btn-lg rounded-full flex-1"
               >
-                Back
+                Trở về
               </button>
               <button
                 onClick={handleManualInput}
                 className="btn btn-primary btn-lg rounded-full flex-1"
               >
-                Continue
+                Tiếp tục
               </button>
             </div>
           </div>
@@ -249,24 +274,28 @@ export default function Start() {
         <div className="w-full pt-20 pb-10">
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">
-              Select Your Skills
+              Chọn kĩ năng của bạn
             </h2>
             <p className="text-gray-600">
-              {analysisResult?.experience_summary === "Manual entry - no CV uploaded" 
-                ? "Select or add skills that best describe you" 
-                : "We found these skills in your CV. Select the ones you want to highlight."}
+              {analysisResult?.experience_summary ===
+              "Nhập thủ công - chưa có CV"
+                ? "Chọn hoặc thêm các kỹ năng mô tả tốt nhất về bạn."
+                : "Chúng tôi đã tìm thấy những kỹ năng này trong CV của bạn. Hãy chọn những kỹ năng bạn muốn làm nổi bật."}
             </p>
           </div>
 
           <div className="flex justify-between items-center mb-6">
+            {/* --- KHU VỰC CẦN SỬA 2: Chữ 'selected' --- */}
             <p className="text-sm text-gray-500">
-              {selectedSkills.length} / {extractedSkills.length} selected
+              Đã chọn {selectedSkills.length} / {extractedSkills.length}
             </p>
             <button
               onClick={handleSelectAllSkills}
               className="btn btn-sm btn-outline"
             >
-              {selectedSkills.length === extractedSkills.length ? "Deselect All" : "Select All"}
+              {selectedSkills.length === extractedSkills.length
+                ? "Bỏ chọn tất cả"
+                : "Chọn tất cả"}
             </button>
           </div>
 
@@ -291,7 +320,7 @@ export default function Start() {
             className="btn btn-lg px-20 py-6 rounded-full w-full text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all text-white border-none bg-gradient-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90%"
             disabled={selectedSkills.length === 0}
           >
-            Continue to Tasks
+            Tiếp tục nhiệm vụ
           </button>
         </div>
       )}
@@ -300,10 +329,10 @@ export default function Start() {
         <div className="w-full pt-20 pb-10">
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">
-              Select Relevant Tasks
+              Chọn nhiệm vụ có liên quan
             </h2>
             <p className="text-gray-600">
-              Choose the tasks that best match your experience (optional).
+              Chọn nhiệm vụ phù hợp nhất với kinh nghiệm của bạn (tùy chọn).
             </p>
           </div>
 
@@ -328,13 +357,13 @@ export default function Start() {
               onClick={() => setStep("skills")}
               className="btn btn-ghost btn-lg rounded-full flex-1"
             >
-              Back
+              Trở về
             </button>
             <button
               onClick={handleContinueToResult}
               className="btn btn-lg px-20 py-6 rounded-full text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all text-white border-none bg-gradient-to-r from-indigo-500 from-10% via-sky-500 via-30% to-emerald-500 to-90%"
             >
-              View Analysis Results
+              Xem kết quả phân tích
             </button>
           </div>
         </div>

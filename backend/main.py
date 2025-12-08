@@ -370,34 +370,34 @@ async def analyze_cv(data: CVAnalysisRequest):
     Analyze CV text and extract: role, skills, experience, pros/cons, learning path
     """
     prompt_template = f"""
-    You are an expert career coach and resume analyzer.
+    Bạn là chuyên gia hướng dẫn nghề nghiệp và phân tích sơ yếu lý lịch.
     
-    Analyze the following CV text and extract comprehensive insights:
+    Phân tích văn bản sơ yếu lý lịch sau và trích xuất các thông tin chi tiết toàn diện:
     
-    CV TEXT:
+    Văn bản CV:
     {data.cv_text}
     
-    TARGET ROLE (if provided): {data.role or 'Not specified'}
-    TARGET ORGANIZATION (if provided): {data.organization or 'Not specified'}
+    VAI TRÒ MỤC TIÊU (nếu có): {data.role or 'Không xác định'}
+    TỔ CHỨC MỤC TIÊU (nếu có): {data.organization or 'Không xác định'}
     
-    Provide a detailed analysis in JSON format with the following structure:
+    Cung cấp phân tích chi tiết theo định dạng JSON với cấu trúc sau:
     {{
-      "extracted_role": "Primary role/position based on CV (e.g., 'Software Engineer', 'Marketing Manager')",
-      "skills": ["skill1", "skill2", "skill3", ...],
-      "experience_years": "Estimated years of experience",
-      "experience_summary": "Brief summary of work experience",
-      "education": "Education background",
-      "strengths": ["strength1", "strength2", ...],
-      "weaknesses": ["area1 to improve", "area2 to improve", ...],
+      "extracted_role": "Vai trò/vị trí chính dựa trên CV (ví dụ: 'Kỹ sư phần mềm', 'Quản lý tiếp thị')",
+      "skills": ["kỹ năng1", "kỹ năng2", "kỹ năng3", ...],
+      "experience_years": "Số năm kinh nghiệm ước tính",
+      "experience_summary": "Tóm tắt ngắn gọn về kinh nghiệm làm việc",
+      "education": "Nền tảng giáo dục",
+      "strengths": ["điểm mạnh1", "điểm mạnh2", ...],
+      "weaknesses": ["điểm yếu1", "điểm yếu2", ...],
       "learning_path": {{
-        "immediate": ["skill or area to learn immediately"],
-        "short_term": ["skills for next 3-6 months"],
-        "long_term": ["skills for 6-12 months"]
+        "immediate": ["kỹ năng hoặc lĩnh vực cần học ngay lập tức"],
+        "short_term": ["kỹ năng cho 3-6 tháng tới"],
+        "long_term": ["kỹ năng cho 6-12 tháng"]
       }},
-      "recommended_tasks": ["task1", "task2", ...]
+      "recommended_tasks": ["nhiệm vụ 1", "nhiệm vụ 2", ...]
     }}
     
-    Return ONLY the JSON object, no additional text.
+    Chỉ trả về đối tượng JSON, không có văn bản bổ sung.
     """
     
     try:
@@ -474,23 +474,23 @@ async def generate_questions(data: QuestionGenerationRequest):
     skills_text = ", ".join(data.skills) if data.skills else "general professional skills"
     role_text = data.role or data.field
     
-    prompt_template = f"""You are a senior HR recruitment expert. Generate interview questions for the following profile:
+    prompt_template = f"""Bạn là chuyên gia tuyển dụng nhân sự cấp cao. Hãy tạo các câu hỏi phỏng vấn cho hồ sơ sau:
 
 TARGET ROLE: {role_text}
 FIELD: {data.field}
 KEY SKILLS: {skills_text}
 
-Return ONLY a valid JSON array of 15-20 strings (no markdown, no text outside brackets).
-Each question MUST start with exactly one tag: [Background], [Situation], or [Technical].
+CHỈ trả về một mảng JSON hợp lệ gồm 15-20 chuỗi (không có markdown, không có văn bản bên ngoài dấu ngoặc).
+Mỗi câu hỏi PHẢI bắt đầu chính xác với một thẻ: [Background], [Situation], hoặc [Technical].
 
-Example format:
+Định dạng ví dụ:
 [
-  "[Background] Tell me about your experience with data analysis.",
-  "[Situation] Describe how you handled a difficult deadline.",
-  "[Technical] Explain the key concepts of machine learning."
+  "[Bối cảnh] Hãy kể cho tôi nghe về kinh nghiệm của bạn với việc phân tích dữ liệu.",
+  "[Tình huống] Mô tả cách bạn xử lý một hạn chót khó khăn.",
+  "[Kỹ thuật] Giải thích các khái niệm chính của học máy."
 ]
 
-Make questions specific to the role and skills. Return ONLY the JSON array, nothing else."""
+Đặt câu hỏi cụ thể cho vai trò và kỹ năng. CHỈ trả về mảng JSON, không trả về bất kỳ dữ liệu nào khác."""
     
     try:
         response = await model.generate_content_async(prompt_template)
@@ -511,23 +511,23 @@ Make questions specific to the role and skills. Return ONLY the JSON array, noth
             questions = json.loads(json_str)
             
             if not isinstance(questions, list):
-                raise ValueError("Response is not a list")
+                raise ValueError("Phản hồi không phải là một danh sách")
             
             return JSONResponse(content={"questions": questions})
         else:
             return JSONResponse(
                 status_code=500,
-                content={"error": "Could not find JSON array from AI.", "raw": raw_text[:500]}
+                content={"error": "Không thể tìm thấy mảng JSON từ AI.", "raw": raw_text[:500]}
             )
     except json.JSONDecodeError as e:
         return JSONResponse(
             status_code=500,
-            content={"error": f"JSON parsing error: {str(e)}", "raw": raw_text[:500]}
+            content={"error": f"Lỗi phân tích JSON: {str(e)}", "raw": raw_text[:500]}
         )
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"error": f"Error generating questions: {str(e)}"}
+            content={"error": f"Lỗi khi tạo câu hỏi: {str(e)}"}
         )
     
 app.mount("/", 
