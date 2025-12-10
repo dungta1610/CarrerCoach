@@ -25,6 +25,7 @@ export default function ResultsPage() {
   const [generatedCV, setGeneratedCV] = useState("");
   const [matchedJobs, setMatchedJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingJobs, setLoadingJobs] = useState(false);
 
   useEffect(() => {
     const data = localStorage.getItem("cvAnalysis");
@@ -33,6 +34,11 @@ export default function ResultsPage() {
     if (data) {
       const parsed = JSON.parse(data);
       setAnalysis(parsed);
+
+      // Auto-fetch jobs if not in session storage
+      if (!jobsData) {
+        fetchJobRecommendations(parsed);
+      }
     }
 
     if (jobsData) {
@@ -40,6 +46,43 @@ export default function ResultsPage() {
       setMatchedJobs(jobs);
     }
   }, []);
+
+  const fetchJobRecommendations = async (analysisData?: AnalysisData) => {
+    const data = analysisData || analysis;
+    if (!data) return;
+
+    setLoadingJobs(true);
+    try {
+      const response = await fetch("http://localhost:8000/api/recommend-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: data.extracted_role || "",
+          skills: data.selectedSkills || data.skills || [],
+          experience_years: parseInt(data.experience_years) || 0,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      const jobs = result.jobs || [];
+      setMatchedJobs(jobs);
+      sessionStorage.setItem("recommendedJobs", JSON.stringify(jobs));
+    } catch (error) {
+      console.error("Error fetching job recommendations:", error);
+      alert("Không thể tải công việc phù hợp. Vui lòng thử lại.");
+    } finally {
+      setLoadingJobs(false);
+    }
+  };
 
   const generateCV = async () => {
     if (!analysis) return;
@@ -342,11 +385,49 @@ export default function ResultsPage() {
                 Cơ hội việc làm
               </span>
             </div>
-            <h3 className="text-2xl font-bold text-gray-800 mb-4">
-              Việc làm phù hợp từ ITViec
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-2xl font-bold text-gray-800">
+                Việc làm phù hợp từ ITViec
+              </h3>
+              <button
+                onClick={() => fetchJobRecommendations()}
+                disabled={loadingJobs}
+                className="btn btn-sm btn-outline"
+              >
+                {loadingJobs ? (
+                  <>
+                    <span className="loading loading-spinner loading-xs"></span>
+                    Đang tải...
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Làm mới
+                  </>
+                )}
+              </button>
+            </div>
 
-            {matchedJobs.length === 0 ? (
+            {loadingJobs ? (
+              <div className="text-center py-12">
+                <span className="loading loading-spinner loading-lg text-primary"></span>
+                <p className="mt-4 text-gray-600">
+                  Đang tìm công việc phù hợp...
+                </p>
+              </div>
+            ) : matchedJobs.length === 0 ? (
               <div className="text-center py-12">
                 <svg
                   className="w-16 h-16 mx-auto mb-4 text-gray-400"
@@ -361,7 +442,15 @@ export default function ResultsPage() {
                     d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                   />
                 </svg>
-                <p className="text-gray-600">Chưa tìm thấy công việc phù hợp</p>
+                <p className="text-gray-600 mb-4">
+                  Chưa tìm thấy công việc phù hợp
+                </p>
+                <button
+                  onClick={() => fetchJobRecommendations()}
+                  className="btn btn-primary btn-sm"
+                >
+                  Tìm công việc
+                </button>
               </div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto">

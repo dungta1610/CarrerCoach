@@ -27,3 +27,8 @@ class QuestionGenerationRequest(BaseModel):
 class TextToSpeechRequest(BaseModel):
     text: str
     language: str = "en-US"
+
+class JobRecommendationRequest(BaseModel):
+    role: str
+    skills: List[str]
+    experience_years: int = 0

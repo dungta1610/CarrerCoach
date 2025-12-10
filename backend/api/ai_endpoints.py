@@ -108,6 +108,8 @@ async def analyze_cv(data: CVAnalysisRequest):
     VAI TRÒ MỤC TIÊU (nếu có): {data.role or 'Không xác định'}
     TỔ CHỨC MỤC TIÊU (nếu có): {data.organization or 'Không xác định'}
  
+    QUAN TRỌNG: TẤT CẢ nội dung phân tích, mô tả, điểm mạnh, điểm yếu, nhiệm vụ đề xuất PHẢI viết bằng TIẾNG VIỆT, kể cả khi CV gốc bằng tiếng Anh.
+ 
     Cung cấp phân tích chi tiết theo định dạng JSON với cấu trúc sau:
     {{
       "extracted_role": "Vai trò/vị trí chính dựa trên CV (ví dụ: 'Kỹ sư phần mềm', 'Quản lý tiếp thị')",
@@ -125,6 +127,7 @@ async def analyze_cv(data: CVAnalysisRequest):
       "recommended_tasks": ["nhiệm vụ 1", "nhiệm vụ 2", ...]
     }}
  
+    LƯU Ý: Tất cả giá trị trong JSON (strengths, weaknesses, learning_path, recommended_tasks) đều PHẢI là tiếng Việt.
     Chỉ trả về đối tượng JSON, không có văn bản bổ sung.
     """
     
