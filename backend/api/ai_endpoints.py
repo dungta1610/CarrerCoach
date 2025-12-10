@@ -1,9 +1,12 @@
 # api/ai_endpoints.py
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 import json
 import re
+import io
+from docx import Document
+from docx.shared import Pt, RGBColor
 # Import từ file config/models mới
 from core.models import UserInput, CVAnalysisRequest, CVGenerationRequest, QuestionGenerationRequest
 from core.config import GEMINI_MODEL # Import model đã được cấu hình
@@ -193,6 +196,77 @@ async def generate_cv(data: CVGenerationRequest):
         return JSONResponse(content={"cv_markdown": cv_markdown})
     except Exception as e:
         print(f"Error in CV generation: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@router.post("/generate-cv-docx")
+async def generate_cv_docx(data: CVGenerationRequest):
+    """
+    Generate a CV in DOCX format based on user profile
+    """
+    skills_list = ", ".join(data.skills)
+    achievements_list = "\n".join([f"- {a}" for a in data.achievements]) if data.achievements else "- [Add your achievements]"
+    
+    prompt_template = f"""
+    You are an expert CV/resume writer.
+    
+    Create a professional CV for a candidate with the following profile using English:
+    
+    ROLE: {data.role}
+    SKILLS: {skills_list}
+    EXPERIENCE: {data.experience}
+    EDUCATION: {data.education}
+    ACHIEVEMENTS:
+    {achievements_list}
+    
+    Generate a complete, professional CV with the following sections:
+    - Header with [Your Full Name] and contact placeholders
+    - Professional Summary (2-3 sentences)
+    - Skills (list format)
+    - Work Experience (with job titles, companies, dates, responsibilities)
+    - Education
+    - Achievements
+    
+    Make it ATS-friendly and professional. Use clear section headers.
+    Return plain text content, no markdown syntax, no code blocks.
+    """
+    
+    try:
+        response = await GEMINI_MODEL.generate_content_async(prompt_template)
+        cv_text = response.text.strip()
+        
+        # Create DOCX document
+        doc = Document()
+        
+        # Parse the CV text and add to document
+        lines = cv_text.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if it's a section header (all caps or ends with colon)
+            if line.isupper() or line.endswith(':'):
+                # Add section header
+                heading = doc.add_heading(line.rstrip(':'), level=2)
+                heading.runs[0].font.color.rgb = RGBColor(0, 0, 139)
+            else:
+                # Add regular paragraph
+                para = doc.add_paragraph(line)
+                para.style = 'Normal'
+        
+        # Save to BytesIO
+        docx_io = io.BytesIO()
+        doc.save(docx_io)
+        docx_io.seek(0)
+        
+        return StreamingResponse(
+            docx_io,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": "attachment; filename=CV_Generated.docx"}
+        )
+    except Exception as e:
+        print(f"Error in CV DOCX generation: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @router.post("/generate-questions")

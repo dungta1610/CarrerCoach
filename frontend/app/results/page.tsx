@@ -299,56 +299,35 @@ export default function ResultsPage() {
                   <button
                     onClick={async () => {
                       try {
-                        const {
-                          Document,
-                          Paragraph,
-                          TextRun,
-                          HeadingLevel,
-                          AlignmentType,
-                        } = await import("docx");
-                        const { saveAs } = await import("file-saver");
-
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const children: any[] = [];
-                        generatedCV.split("\n").forEach((line) => {
-                          if (line.startsWith("# ")) {
-                            children.push(
-                              new Paragraph({
-                                text: line.slice(2),
-                                heading: HeadingLevel.HEADING_1,
-                              })
-                            );
-                          } else if (line.startsWith("## ")) {
-                            children.push(
-                              new Paragraph({
-                                text: line.slice(3),
-                                heading: HeadingLevel.HEADING_2,
-                              })
-                            );
-                          } else if (line.startsWith("### ")) {
-                            children.push(
-                              new Paragraph({
-                                text: line.slice(4),
-                                heading: HeadingLevel.HEADING_3,
-                              })
-                            );
-                          } else if (line.startsWith("- ")) {
-                            children.push(
-                              new Paragraph({
-                                text: line.slice(2),
-                                bullet: { level: 0 },
-                              })
-                            );
-                          } else if (line.trim()) {
-                            children.push(new Paragraph({ text: line }));
+                        const response = await fetch(
+                          "http://localhost:8000/api/generate-cv-docx",
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              role: analysis.extracted_role,
+                              skills:
+                                analysis.selectedSkills || analysis.skills,
+                              experience: analysis.experience_summary,
+                              education: analysis.education,
+                              achievements: [],
+                            }),
                           }
-                        });
-
-                        const doc = new Document({ sections: [{ children }] });
-                        const blob = await import("docx").then((m) =>
-                          m.Packer.toBlob(doc)
                         );
-                        saveAs(blob, "cv-mau.docx");
+
+                        if (!response.ok) {
+                          throw new Error("Failed to generate DOCX");
+                        }
+
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "CV_Generated.docx";
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
                       } catch (error) {
                         console.error("DOCX generation error:", error);
                         alert(
