@@ -19,11 +19,10 @@ try:
     if os.path.exists(DATA_PATH):
         with open(DATA_PATH, 'r', encoding='utf-8') as f:
             JOB_DATABASE = json.load(f)
-        print(f"✅ Đã tải {len(JOB_DATABASE)} công việc vào bộ nhớ.")
     else:
-        print(f"⚠️ Không tìm thấy file data tại: {DATA_PATH}")
+        print(f"Không tìm thấy file data tại: {DATA_PATH}")
 except Exception as e:
-    print(f"❌ Lỗi load data: {e}")
+    print(f"Lỗi load data: {e}")
 
 # Danh sách skill phổ biến để gợi ý thiếu
 COMMON_SKILLS = {

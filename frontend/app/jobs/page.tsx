@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useLanguage } from "../../context/LanguageContext";
-import { useUserProfile, JobMatch } from "../../context/UserProfileContext";
+import { useLanguage } from "../context/LanguageContext";
+import { useUserProfile, JobMatch } from "../context/UserProfileContext";
 
 export default function JobMatching() {
   const { t } = useLanguage();
@@ -35,7 +35,7 @@ export default function JobMatching() {
         body: JSON.stringify({
           role: profile?.role || "",
           skills: profile?.selectedSkills || [],
-          experience_years: profile?.experienceYears || 0,
+          experience_years: 0,
         }),
       });
 
