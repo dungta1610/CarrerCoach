@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useLanguage } from "../context/LanguageContext";
-import { useUserProfile, JobMatch } from "../context/UserProfileContext";
+import { useLanguage } from "@/context/LanguageContext";
+import { useUserProfile, JobMatch } from "@/context/UserProfileContext";
 
 export default function JobMatching() {
   const { t } = useLanguage();
