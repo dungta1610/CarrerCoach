@@ -9,6 +9,11 @@ from api import ai_endpoints, media_endpoints, util_endpoints
 
 app = FastAPI()
 
+origins = [
+    "http://localhost:3000",
+    "https://carrer-coach-nnkd.vercel.app", # <-- Thay link Vercel của bạn vào đây
+]
+
 # --- Cấu hình Middleware ---
 app.add_middleware(
     CORSMiddleware,
