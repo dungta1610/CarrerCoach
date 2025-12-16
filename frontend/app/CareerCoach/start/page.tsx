@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { apiUrl } from "@/app/utils/apiBaseUrl";
 
 export default function Start() {
   const router = useRouter();
@@ -22,10 +21,13 @@ export default function Start() {
   const handleFileUpload = async (file: File) => {
     setAnalyzing(true);
     try {
+      const API_BASE_URL =
+        process.env.NEXT_PUBLIC_API_URL ||
+        "https://careercoach-52gj.onrender.com";
       const formData = new FormData();
       formData.append("file", file);
 
-      const uploadRes = await fetch(apiUrl("/api/upload-cv"), {
+      const uploadRes = await fetch(`${API_BASE_URL}/api/upload-cv`, {
         method: "POST",
         body: formData,
       });
@@ -39,7 +41,7 @@ export default function Start() {
 
       setCvText(uploadData.cv_text);
 
-      const analysisRes = await fetch(apiUrl("/api/analyze-cv"), {
+      const analysisRes = await fetch(`${API_BASE_URL}/api/analyze-cv`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cv_text: uploadData.cv_text }),
