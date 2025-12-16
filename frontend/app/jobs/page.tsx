@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/app/context/LanguageContext";
 import { useUserProfile, JobMatch } from "@/app/context/UserProfileContext";
+import { apiUrl } from "@/app/utils/apiBaseUrl";
 
 export default function JobMatching() {
   const { t } = useLanguage();
@@ -27,7 +28,7 @@ export default function JobMatching() {
     setError(null);
 
     try {
-      const response = await fetch("http://localhost:8000/api/recommend-jobs", {
+      const response = await fetch(apiUrl("/api/recommend-jobs"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -35,7 +36,7 @@ export default function JobMatching() {
         body: JSON.stringify({
           role: profile?.role || "",
           skills: profile?.selectedSkills || [],
-          experience_years: 0,
+          experience_years: profile?.experienceYears ?? 0,
         }),
       });
 

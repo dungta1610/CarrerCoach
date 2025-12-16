@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { apiUrl } from "@/app/utils/apiBaseUrl";
 
 interface AnalysisData {
   extracted_role: string;
@@ -53,7 +54,7 @@ export default function ResultsPage() {
 
     setLoadingJobs(true);
     try {
-      const response = await fetch("http://localhost:8000/api/recommend-jobs", {
+      const response = await fetch(apiUrl("/api/recommend-jobs"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,7 +90,7 @@ export default function ResultsPage() {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/api/generate-cv", {
+      const response = await fetch(apiUrl("/api/generate-cv"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -300,7 +301,7 @@ export default function ResultsPage() {
                     onClick={async () => {
                       try {
                         const response = await fetch(
-                          "http://localhost:8000/api/generate-cv-docx",
+                          apiUrl("/api/generate-cv-docx"),
                           {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },

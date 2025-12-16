@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { apiUrl } from "@/app/utils/apiBaseUrl";
 
 export default function Start() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function Start() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const uploadRes = await fetch("http://localhost:8000/api/upload-cv", {
+      const uploadRes = await fetch(apiUrl("/api/upload-cv"), {
         method: "POST",
         body: formData,
       });
@@ -38,7 +39,7 @@ export default function Start() {
 
       setCvText(uploadData.cv_text);
 
-      const analysisRes = await fetch("http://localhost:8000/api/analyze-cv", {
+      const analysisRes = await fetch(apiUrl("/api/analyze-cv"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cv_text: uploadData.cv_text }),

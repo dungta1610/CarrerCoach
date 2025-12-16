@@ -4,6 +4,7 @@ import React from "react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { parseMarkdown, renderMarkdown } from "@/app/utils/markdownParser";
+import { apiUrl } from "@/app/utils/apiBaseUrl";
 
 interface InterviewContext {
   field: string;
@@ -32,7 +33,7 @@ const CallPage: React.FC = () => {
     const data = localStorage.getItem("interviewContext");
     const storedLanguage = localStorage.getItem("language") || "en";
     setLanguage(storedLanguage);
-    
+
     if (data) {
       const parsedContext = JSON.parse(data);
       setContext(parsedContext);
@@ -56,7 +57,9 @@ const CallPage: React.FC = () => {
   // Theo dõi câu hỏi nào đang được đánh giá
   const [evaluating, setEvaluating] = useState<{ [key: string]: boolean }>({});
   // Theo dõi câu hỏi nào có feedback bị thu gọn
-  const [collapsedFeedback, setCollapsedFeedback] = useState<{ [key: string]: boolean }>({});
+  const [collapsedFeedback, setCollapsedFeedback] = useState<{
+    [key: string]: boolean;
+  }>({});
 
   const handleAnswerChange = (
     category: string,
@@ -87,7 +90,7 @@ const CallPage: React.FC = () => {
 
       console.log(`Sending feedback request for ${key}...`);
 
-      const res = await fetch("http://localhost:8000/api/gemini", {
+      const res = await fetch(apiUrl("/api/gemini"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: questionContext }),
@@ -197,7 +200,7 @@ const CallPage: React.FC = () => {
         formData.append("language", language === "vi" ? "vi-VN" : "en-US");
 
         try {
-          const res = await fetch("http://localhost:8000/api/process-voice", {
+          const res = await fetch(apiUrl("/api/process-voice"), {
             method: "POST",
             body: formData,
           });
@@ -244,7 +247,7 @@ const CallPage: React.FC = () => {
   const generateQuestions = async (contextData: InterviewContext) => {
     setLLMResponse("Đang tải...");
     try {
-      const res = await fetch("http://localhost:8000/api/generate-questions", {
+      const res = await fetch(apiUrl("/api/generate-questions"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -550,7 +553,9 @@ const CallPage: React.FC = () => {
                                 }));
                               }}
                               className="p-1 hover:bg-gray-100 rounded transition-colors"
-                              title={collapsedFeedback[key] ? "Mở rộng" : "Thu gọn"}
+                              title={
+                                collapsedFeedback[key] ? "Mở rộng" : "Thu gọn"
+                              }
                             >
                               <svg
                                 className={`w-5 h-5 text-gray-500 transition-transform ${
@@ -572,7 +577,9 @@ const CallPage: React.FC = () => {
                           {!collapsedFeedback[key] && (
                             <>
                               <p className="text-sm text-gray-700 leading-relaxed mb-3">
-                                {renderMarkdown(parseMarkdown(feedback[key].advice))}
+                                {renderMarkdown(
+                                  parseMarkdown(feedback[key].advice)
+                                )}
                               </p>
                               {feedback[key].suggested_answer && (
                                 <div className="mt-3 pt-3 border-t border-gray-200">
@@ -580,7 +587,11 @@ const CallPage: React.FC = () => {
                                     Câu trả lời gợi ý:
                                   </p>
                                   <p className="text-sm text-gray-600 leading-relaxed italic">
-                                    {renderMarkdown(parseMarkdown(feedback[key].suggested_answer))}
+                                    {renderMarkdown(
+                                      parseMarkdown(
+                                        feedback[key].suggested_answer
+                                      )
+                                    )}
                                   </p>
                                 </div>
                               )}
@@ -770,7 +781,9 @@ const CallPage: React.FC = () => {
                                 }));
                               }}
                               className="p-1 hover:bg-gray-100 rounded transition-colors"
-                              title={collapsedFeedback[key] ? "Mở rộng" : "Thu gọn"}
+                              title={
+                                collapsedFeedback[key] ? "Mở rộng" : "Thu gọn"
+                              }
                             >
                               <svg
                                 className={`w-5 h-5 text-gray-500 transition-transform ${
@@ -792,7 +805,9 @@ const CallPage: React.FC = () => {
                           {!collapsedFeedback[key] && (
                             <>
                               <p className="text-sm text-gray-700 leading-relaxed mb-3">
-                                {renderMarkdown(parseMarkdown(feedback[key].advice))}
+                                {renderMarkdown(
+                                  parseMarkdown(feedback[key].advice)
+                                )}
                               </p>
                               {feedback[key].suggested_answer && (
                                 <div className="mt-3 pt-3 border-t border-gray-200">
@@ -800,7 +815,11 @@ const CallPage: React.FC = () => {
                                     Câu trả lời gợi ý:
                                   </p>
                                   <p className="text-sm text-gray-600 leading-relaxed italic">
-                                    {renderMarkdown(parseMarkdown(feedback[key].suggested_answer))}
+                                    {renderMarkdown(
+                                      parseMarkdown(
+                                        feedback[key].suggested_answer
+                                      )
+                                    )}
                                   </p>
                                 </div>
                               )}
@@ -990,7 +1009,9 @@ const CallPage: React.FC = () => {
                                 }));
                               }}
                               className="p-1 hover:bg-gray-100 rounded transition-colors"
-                              title={collapsedFeedback[key] ? "Mở rộng" : "Thu gọn"}
+                              title={
+                                collapsedFeedback[key] ? "Mở rộng" : "Thu gọn"
+                              }
                             >
                               <svg
                                 className={`w-5 h-5 text-gray-500 transition-transform ${
@@ -1012,7 +1033,9 @@ const CallPage: React.FC = () => {
                           {!collapsedFeedback[key] && (
                             <>
                               <p className="text-sm text-gray-700 leading-relaxed mb-3">
-                                {renderMarkdown(parseMarkdown(feedback[key].advice))}
+                                {renderMarkdown(
+                                  parseMarkdown(feedback[key].advice)
+                                )}
                               </p>
                               {feedback[key].suggested_answer && (
                                 <div className="mt-3 pt-3 border-t border-gray-200">
@@ -1020,7 +1043,11 @@ const CallPage: React.FC = () => {
                                     Câu trả lời gợi ý:
                                   </p>
                                   <p className="text-sm text-gray-600 leading-relaxed italic">
-                                    {renderMarkdown(parseMarkdown(feedback[key].suggested_answer))}
+                                    {renderMarkdown(
+                                      parseMarkdown(
+                                        feedback[key].suggested_answer
+                                      )
+                                    )}
                                   </p>
                                 </div>
                               )}
